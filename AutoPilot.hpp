@@ -160,7 +160,7 @@ struct Segment;
 Segment GenerateSegment(Spline Function, double Jerk);
 struct Segment
 {
-    double A, B, C, time;
+    double A, B, C, D, time;
     Spline spline, xSpline, ySpline;
     double Velocity(double Seconds) 
     {
@@ -206,52 +206,52 @@ struct Segment
 		}
     }
 
-    Segment(Spline normFunc, Spline xfunc, Spline yfunc, double a, double b, double c, double time) : spline(normFunc), xSpline(xfunc), ySpline(yfunc), A(a), B(b), C(c), time(time) {}
+    Segment(Spline normFunc, Spline xfunc, Spline yfunc, double a, double b, double c, double d, double time) : spline(normFunc), xSpline(xfunc), ySpline(yfunc), A(a), B(b), C(c), D(d), time(time) {}
     Segment(Spline func, double jerk) : Segment(GenerateSegment(func, jerk)) {}
-    Segment() : A(0), B(0), C(0), time(0), spline(Spline()), xSpline(Spline()), ySpline(Spline()) {}
+    Segment() : A(0), B(0), C(0), D(0), time(0), spline(Spline()), xSpline(Spline()), ySpline(Spline()) {}
 };
 
 Segment GenerateSegment(Spline Function, double Jerk)
 {
-    double B0, B1, B2, Time;
+    double B0, B1, B2, B3, Time;
     Time = TimeGivenSFJ(Function, Jerk);
     Spline XFunction = HermiteFinder(Waypoint{ 0, 0, Function.point1.Angle }, Waypoint{ Time, Function.point1.X - Function.point1.X, Function.point2.Angle });
     Spline YFunction = HermiteFinder(Waypoint{ 0, 0, Function.point2.Angle }, Waypoint{ Time, Function.point2.Y - Function.point1.Y, Function.point2.Angle });
-    B0 = Function.function.A; B1 = Function.function.B; B2 = Function.function.C;
-    return Segment(Function, XFunction, YFunction, B0, B1, B2, Time);
+    B0 = Function.function.A; B1 = Function.function.B; B2 = Function.function.C; B3 = Function.function.D;
+    return Segment(Function, XFunction, YFunction, B0, B1, B2, B3, Time);
 }
 
 typedef std::vector<Segment> Trajectory;
 class TankConfig 
 {
-    Curve curve;
-    Curve leftSideCurve, rightSideCurve;
-
     Trajectory leftTrajectory;
     Trajectory rightTrajectory;
 
     public:
-    template<typename SpeedControllerGroup>
-    void run(SpeedControllerGroup leftSide, SpeedControllerGroup rightSide)
+    template<typename SpeedControllerGroup, typename Encoder>
+    void run(SpeedControllerGroup leftSide, SpeedControllerGroup rightSide, double jerk, double Kp)
     {
-
+        //u = Κₚe
+        left
     }
 
     void testTrajectory()
     {
         for (size_t i = 0; i < leftTrajectory.size(); i++)
         {
-            std::cout << "Left Segment " << i << "'s Values: " << leftTrajectory[i].A << " " << leftTrajectory[i].B << " " << leftTrajectory[i].C << "\n";        
+            std::cout << "Left Segment " << i << "'s Values: " << leftTrajectory[i].A << " " << leftTrajectory[i].B << " " << leftTrajectory[i].C << " " << leftTrajectory[i].D <<"\n";        
+        }
+        for (size_t i = 0; i < rightTrajectory.size(); i++)
+        {
+            std::cout << "Right Segment " << i << "'s Values: " << rightTrajectory[i].A << " " << rightTrajectory[i].B << " " << rightTrajectory[i].C << " " << rightTrajectory[i].D <<"\n";        
         }
     }
 
-    TankConfig(Curve theCurve, double widthBetweenWheels, double jerk) 
+    TankConfig(Curve curve, double widthBetweenWheels, double jerk) 
     {
-        curve = theCurve;
-        leftSideCurve = Curve(curve.size());
-        rightSideCurve = Curve(curve.size());
-        leftTrajectory = Trajectory(curve.size());
-        rightTrajectory = Trajectory(curve.size());
+        leftTrajectory = Trajectory();
+        rightTrajectory = Trajectory();
+        double centerToWheels = widthBetweenWheels / 2;
         for (Spline s : curve) 
         {
             auto x1 = s.point1.X;
@@ -272,42 +272,82 @@ class TankConfig
             
             auto normalLine1 = pointSlopeForm(x1, y1, normal1);
             auto normalLine2 = pointSlopeForm(x2, x2, normal2);
+
+            double nx1, nx2, nx3, nx4, ny1, ny2, ny3, ny4;
             
-            if (sin(s.point1.Angle * DEGREES2RADIANS) > 0) 
+            if (normal1 == NAN || normal1 == -INFINITY) 
             {
-                auto nx1 = x1 + ((widthBetweenWheels / 2) / sqrt(1 + normal1));
-                auto ny1 = normalLine1(nx1);
-                auto nx2 = x2 + ((widthBetweenWheels / 2) / sqrt(1 + normal2));
-                auto ny2 = normalLine2(nx2);
-
-                auto nx3 = x1 - ((widthBetweenWheels / 2) / sqrt(1 + normal1));
-                auto ny3 = normalLine1(nx3);
-                auto nx4 = x2 - ((widthBetweenWheels / 2) / sqrt(1 + normal2));
-                auto ny4 = normalLine2(nx4);
-
-                leftSideCurve.push_back(Spline(Waypoint(nx1, ny2, s.point1.Angle), Waypoint(nx2, ny2, s.point1.Angle)));
-                rightSideCurve.push_back(Spline(Waypoint(nx3, ny3, s.point1.Angle), Waypoint(nx4, ny4, s.point2.Angle)));
-                leftTrajectory.push_back(Segment(leftSideCurve[leftSideCurve.size() - 1], jerk));
-                rightTrajectory.push_back(Segment(rightSideCurve[rightSideCurve.size() - 1], jerk));
-
+                nx1 = x1; 
+                nx3 = x1;
+                if (sin(s.point1.Angle * DEGREES2RADIANS) > 0)
+                {
+                    ny1 = y1 - centerToWheels;
+                    ny3 = y1 + centerToWheels;
+                }
+                else 
+                {
+                    ny1 = y1 + centerToWheels;
+                    ny3 = y1 - centerToWheels;
+                }
             } 
-            else
-            {
-                auto nx1 = x1 - ((widthBetweenWheels / 2) / sqrt(1 + normal1));
-                auto ny1 = normalLine1(nx1);
-                auto nx2 = x2 - ((widthBetweenWheels / 2) / sqrt(1 + normal2));
-                auto ny2 = normalLine2(nx2);
-
-                auto nx3 = x1 + ((widthBetweenWheels / 2) / sqrt(1 + normal1));
-                auto ny3 = normalLine1(nx3);
-                auto nx4 = x2 + ((widthBetweenWheels / 2) / sqrt(1 + normal2));
-                auto ny4 = normalLine2(nx4);
-
-                leftSideCurve.push_back(Spline(Waypoint(nx1, ny2, s.point1.Angle), Waypoint(nx2, ny2, s.point1.Angle)));
-                rightSideCurve.push_back(Spline(Waypoint(nx3, ny3, s.point1.Angle), Waypoint(nx4, ny4, s.point2.Angle)));
-                leftTrajectory.push_back(Segment(leftSideCurve[leftSideCurve.size() - 1], jerk));
-                rightTrajectory.push_back(Segment(rightSideCurve[rightSideCurve.size() - 1], jerk));
+            else {
+                if (sin(s.point1.Angle * DEGREES2RADIANS) > 0)
+                {
+                    nx1 = x1 + (centerToWheels / sqrt(1 + (normal1 * normal1)));
+                    nx3 = x1 - (centerToWheels / sqrt(1 + (normal1 * normal1)));
+                }
+                else 
+                {
+                    nx1 = x1 - (centerToWheels / sqrt(1 + (normal1 * normal1)));
+                    nx3 = x1 + (centerToWheels / sqrt(1 + (normal1 * normal1)));
+                }
+                ny1 = normalLine1(nx1);
+                ny3 = normalLine1(nx3);
             }
+            if (normal2 == NAN || normal2 == -INFINITY)
+            {
+                nx2 = x2;
+                nx4 = x2;
+                if (sin(s.point2.Angle * DEGREES2RADIANS) > 0)
+                {
+                    ny2 = y2 - centerToWheels;
+                    ny4 = y2 + centerToWheels;
+                }
+                else 
+                {
+                    ny2 = y2 + centerToWheels;
+                    ny4 = y2 - centerToWheels;
+                }
+            } 
+            else 
+            {
+                if (sin(s.point2.Angle * DEGREES2RADIANS) > 0) 
+                {
+                    nx4 = x2 - (centerToWheels / sqrt(1 + (normal2 * normal2)));
+                    nx2 = x2 + (centerToWheels / sqrt(1 + (normal2 * normal2)));
+                } 
+                else
+                {
+                    nx4 = x2 + (centerToWheels / sqrt(1 + (normal2 * normal2)));
+                    nx2 = x2 - (centerToWheels / sqrt(1 + (normal2 * normal2)));
+                }
+                ny2 = normalLine2(nx2);
+                ny4 = normalLine2(nx4);
+            }
+
+
+            Waypoint np1 = Waypoint(nx1, ny1, s.point1.Angle), np2 = Waypoint(nx2, ny2, s.point2.Angle),
+            np3 = Waypoint(nx3, ny3, s.point1.Angle), np4 = Waypoint(nx4, ny4, s.point2.Angle);
+            std::cout << "Wp1 " << x1 << " " <<  y1 << " " << s.point1.Angle << "\n";
+            std::cout << "Wp2 " << x2 << " " <<  y2 << " " << s.point2.Angle << "\n";
+            std::cout << "np1 " << np1.X << " " <<  np1.Y << " " << np1.Angle << "\n";
+            std::cout << "np2 " << np2.X << " " <<  np2.Y << " " << np2.Angle << "\n";
+            std::cout << "np3 " << np3.X << " " <<  np3.Y << " " << np3.Angle << "\n";
+            std::cout << "np4 " << np4.X << " " <<  np4.Y << " " << np4.Angle << "\n";
+            // leftSideCurve.push_back(Spline(Waypoint(nx1, ny2, s.point1.Angle), Waypoint(nx2, ny2, s.point1.Angle)));
+            // rightSideCurve.push_back(Spline(Waypoint(nx3, ny3, s.point1.Angle), Waypoint(nx4, ny4, s.point2.Angle)));
+            leftTrajectory.push_back(Segment(Spline(np1, np2), jerk));
+            rightTrajectory.push_back(Segment(Spline(np3, np4), jerk));
         }
     }
 };
