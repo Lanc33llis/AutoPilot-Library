@@ -9,11 +9,14 @@ int main() {
     cout << "Tesing AP\n";
     cout.precision(6);
     Path path = {Waypoint(0, 0, 30), Waypoint(1, 1, 45)};
+    Path p1 = {Waypoint(.5, -.866025, 30), Waypoint(1.70711, .2928993, 45)};
+    Path p2 = {Waypoint(-.5, .866025, 30), Waypoint(.292893, 1.70711, 45)};
+    Path p3 = {Waypoint(1, 1, 0), Waypoint(2, 5, 0)};
     auto curve = curveGenerator(path);
     TankConfig drive(curve, 2, 2);
     drive.testTrajectory();
     ofstream file;
-    file.open("C:\\Users\\Lance\\Documents\\AutoPilot-Library\\data.html");
+    file.open("C:\\Users\\scdel\\Desktop\\Coding\\AutoPilot-Library\\data.html");
     file << "<!DOCTYPE html><html><head></head><body>";
     file << u8R"(<script src="https://www.desmos.com/api/v1.5/calculator.js?apiKey=dcb31709b452b1cf9dc26972add0fda6"></script>)"s;
 
@@ -45,7 +48,8 @@ int main() {
         file << u8R"('});)"s;
     }
 
-    auto spline = HermiteFinder(path[0], path[1]);
+    auto spline = HermiteFinder(p3[0], p3[1]);
+    cout << "Actual values: " << spline.function.A << " " << spline.function.B << " " << spline.function.C << " " << spline.function.D << "\n";
     file << u8R"(calculator.setExpression({id: 'test')"s;
     file << u8R"(, latex: 'y=)"s;
     file << setprecision(20) << fixed << spline.function.A << "x^3 + " << setprecision(20) << fixed << spline.function.B << "x^2 + " << setprecision(20) << fixed << spline.function.C << "x + " << setprecision(20) << fixed << spline.function.D;

@@ -125,6 +125,19 @@ Spline HermiteFinder(Waypoint PointOne, Waypoint PointTwo)
     return Spline(PointOne, PointTwo, *A3, *A2, *A1, *A0);
 }
 
+Spline HermiteFinder(Waypoint PointOne, Waypoint PointTwo)
+{
+    // p(x) = c0 + c1 * x + c2 * x^2 + c3 * x^3
+    // p(x) = c3 * x^3 + c2 * x^2 + c1 * x + c0
+    double* A0 = new double(0), * A1 = new double(0), * A2 = new double(0), * A3 = new double(0);
+    hermite_cubic_to_power_cubic(PointOne.X, PointOne.Y, Angle2Deriv(PointOne.Angle), PointTwo.X, PointTwo.Y, Angle2Deriv(PointTwo.Angle), A0, A1, A2, A3);
+    return Spline(PointOne, PointTwo, *A3, *A2, *A1, *A0);
+    delete A0;
+    delete A1;
+    delete A2;
+    delete A3;
+}
+
 //uses arc length formula to find distance
 double ArcLengthDistance(Spline TheSplineFunction)
 {   //deriv = 3ax^2 + 2bx + c
@@ -346,8 +359,12 @@ class TankConfig
             std::cout << "np4 " << np4.X << " " <<  np4.Y << " " << np4.Angle << "\n";
             // leftSideCurve.push_back(Spline(Waypoint(nx1, ny2, s.point1.Angle), Waypoint(nx2, ny2, s.point1.Angle)));
             // rightSideCurve.push_back(Spline(Waypoint(nx3, ny3, s.point1.Angle), Waypoint(nx4, ny4, s.point2.Angle)));
-            leftTrajectory.push_back(Segment(Spline(np1, np2), jerk));
-            rightTrajectory.push_back(Segment(Spline(np3, np4), jerk));
+            auto s1 = Spline(np1, np2);
+            auto s2 = Spline(np3, np4);
+            std::cout << "splines here " << s1.function.A << " " << s1.function.B << " " << s1.function.C << " " << s1.function.D << " " << s1.point1.X << " " << s1.point1.Y << "\n";
+            std::cout << "splines here " << s2.function.A << " " << s2.function.B << " " << s2.function.C << " " << s2.function.D << " " << s2.point1.X << " " << s2.point1.Y << "\n";
+            leftTrajectory.push_back(Segment(s1, jerk));
+            rightTrajectory.push_back(Segment(s2, jerk));
         }
     }
 };
