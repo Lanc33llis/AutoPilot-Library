@@ -213,33 +213,33 @@ struct Segment
 
 Segment GenerateSegment(Spline Function, double Jerk)
 {
-    double B0, B1, B2, B3, Time;
+    double A, B, C, D, Time;
     Time = TimeGivenSFJ(Function, Jerk);
     Spline XFunction = HermiteFinder(Waypoint{ 0, 0, Function.point1.Angle }, Waypoint{ Time, Function.point1.X - Function.point1.X, Function.point2.Angle });
     Spline YFunction = HermiteFinder(Waypoint{ 0, 0, Function.point2.Angle }, Waypoint{ Time, Function.point2.Y - Function.point1.Y, Function.point2.Angle });
-    B0 = Function.function.A; B1 = Function.function.B; B2 = Function.function.C; B3 = Function.function.D;
-    return Segment(Function, XFunction, YFunction, B0, B1, B2, B3, Time);
+    A = Function.function.A; B = Function.function.B; C = Function.function.C; D = Function.function.D;
+    return Segment(Function, XFunction, YFunction, A, B, C, D, Time);
 }
 
 typedef std::vector<Segment> Trajectory;
 class TankConfig 
 {
+    public:
     Trajectory leftTrajectory;
     Trajectory rightTrajectory;
 
-    public:
     template<typename SpeedControllerGroup, typename Encoder>
     void run(SpeedControllerGroup leftSide, SpeedControllerGroup rightSide, double jerk, double Kp)
     {
         //u = Κₚe
-        left
+
     }
 
     void testTrajectory()
     {
         for (size_t i = 0; i < leftTrajectory.size(); i++)
         {
-            std::cout << "Left Segment " << i << "'s Values: " << leftTrajectory[i].A << " " << leftTrajectory[i].B << " " << leftTrajectory[i].C << " " << leftTrajectory[i].D <<"\n";        
+            std::cout << "Left Segment " << i << "'s Values: " << leftTrajectory[i].A << " " << leftTrajectory[i].B << " " << leftTrajectory[i].C << " " << leftTrajectory[i].D << " " << leftTrajectory[i].spline.point1.X << " " << leftTrajectory[i].spline.point1.Y << "\n";        
         }
         for (size_t i = 0; i < rightTrajectory.size(); i++)
         {
