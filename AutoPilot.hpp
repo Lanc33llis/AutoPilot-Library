@@ -1,72 +1,95 @@
+#pragma once
+
 #include <vector>
 #include <iostream>
 #include <cmath>
+#include <string>
+#include <fstream>
+#include <iomanip>
 
 const auto PI = 3.141592653589793238462643383279502884L;
 const auto DEGREES2RADIANS = (PI / 180);
 const auto RADIANS2DEGREES = (180 / PI);
 
 void hermite_cubic_to_power_cubic(double x1, double f1, double d1, double x2,
-	double f2, double d2, double* c0, double* c1, double* c2, double* c3)
+    double f2, double d2, double* c0, double* c1, double* c2, double* c3)
 
-	//****************************************************************************80
-	//  Purpose:
-	//
-	//    HERMITE_CUBIC_TO_POWER_CUBIC converts a Hermite cubic to power form.
-	//
-	//  Licensing:
-	//
-	//    This code is distributed under the GNU LGPL license.
-	//
-	//  Modified:
-	//
-	//    13 February 2011
-	//
-	//  Author:
-	//
-	//    John Burkardt
-	//
-	//  Reference:
-	//
-	//    Fred Fritsch, Ralph Carlson,
-	//    Monotone Piecewise Cubic Interpolation,
-	//    SIAM Journal on Numerical Analysis,
-	//    Volume 17, Number 2, April 1980, pages 238-246.
-	//
-	//  Parameters:
-	//
-	//    Input, double X1, F1, D1, the left endpoint, function value
-	//    and derivative.
-	//
-	//    Input, double X2, F2, D2, the right endpoint, function value
-	//    and derivative.
-	//
-	//    Output, double *C0, *C1, *C2, *C3, the power form of the polynomial.
-	//
+    //****************************************************************************80
+    //  Purpose:
+    //
+    //    HERMITE_CUBIC_TO_POWER_CUBIC converts a Hermite cubic to power form.
+    //
+    //  Licensing:
+    //
+    //    This code is distributed under the GNU LGPL license.
+    //
+    //  Modified:
+    //
+    //    13 February 2011
+    //
+    //  Author:
+    //
+    //    John Burkardt
+    //
+    //  Reference:
+    //
+    //    Fred Fritsch, Ralph Carlson,
+    //    Monotone Piecewise Cubic Interpolation,
+    //    SIAM Journal on Numerical Analysis,
+    //    Volume 17, Number 2, April 1980, pages 238-246.
+    //
+    //  Parameters:
+    //
+    //    Input, double X1, F1, D1, the left endpoint, function value
+    //    and derivative.
+    //
+    //    Input, double X2, F2, D2, the right endpoint, function value
+    //    and derivative.
+    //
+    //    Output, double *C0, *C1, *C2, *C3, the power form of the polynomial.
+    //
 {
-	double df;
-	double h;
+    double df;
+    double h;
 
-	h = x2 - x1;
-	df = (f2 - f1) / h;
-	//
-	//  Polynomial in terms of X - X1:
-	//
-	*c0 = f1;
-	*c1 = d1;
-	*c2 = -(2.0 * d1 - 3.0 * df + d2) / h;
-	*c3 = (d1 - 2.0 * df + d2) / h / h;
-	//
-	//  Shift polynomial to X.
-	//
-	*c2 = *c2 - x1 * *c3;
-	*c1 = *c1 - x1 * *c2;
-	*c0 = *c0 - x1 * *c1;
-	*c2 = *c2 - x1 * *c3;
-	*c1 = *c1 - x1 * *c2;
-	*c2 = *c2 - x1 * *c3;
+    h = x2 - x1;
+    df = (f2 - f1) / h;
+    //
+    //  Polynomial in terms of X - X1:
+    //
+    *c0 = f1;
+    *c1 = d1;
+    *c2 = -(2.0 * d1 - 3.0 * df + d2) / h;
+    *c3 = (d1 - 2.0 * df + d2) / h / h;
+    //
+    //  Shift polynomial to X.
+    //
+    *c2 = *c2 - x1 * *c3;
+    *c1 = *c1 - x1 * *c2;
+    *c0 = *c0 - x1 * *c1;
+    *c2 = *c2 - x1 * *c3;
+    *c1 = *c1 - x1 * *c2;
+    *c2 = *c2 - x1 * *c3;
 
-	return;
+    return;
+}
+
+double truncate(double input, size_t accuracy)
+{
+    bool isNeg = false;
+    if (input < 0) 
+    {
+        isNeg = true;
+    }
+    std::string a = std::to_string(input);
+    std::string c = std::string();
+    if (isNeg) {
+        c = a.substr(0, accuracy + 3);
+    }
+    else {
+        c = a.substr(0, accuracy + 2);
+    }
+    return stod(c);
 }
 
 struct Waypoint
@@ -81,9 +104,9 @@ typedef std::vector<Waypoint> Path;
 struct StandardCubicFunction
 {
     double A, B, C, D;
-    double valueAt(double x) 
+    double valueAt(double x)
     {
-        return (A * x * x * x) + (B * x * x) + (C * x)+ D;
+        return (A * x * x * x) + (B * x * x) + (C * x) + D;
     }
     StandardCubicFunction(double a, double b, double c, double d) : A(a), B(b), C(c), D(d) {}
     StandardCubicFunction() : StandardCubicFunction(0, 0, 0, 0) {}
@@ -98,7 +121,7 @@ struct Spline
     Spline(Waypoint p1, Waypoint p2, double A, double B, double C, double D) : point1(p1), point2(p2), function(StandardCubicFunction(A, B, C, D)) {}
     Spline(Waypoint p1, Waypoint p2, StandardCubicFunction func) : point1(p1), point2(p2), function(func) {}
     Spline(Waypoint p1, Waypoint p2) : Spline(HermiteFinder(p1, p2)) {}
-    Spline() : Spline(HermiteFinder(Waypoint(0,0,0), Waypoint(0,0,0))) {}
+    Spline() : Spline(HermiteFinder(Waypoint(0, 0, 0), Waypoint(0, 0, 0))) {}
 };
 
 typedef std::vector<Spline> Curve;
@@ -120,23 +143,23 @@ Spline HermiteFinder(Waypoint PointOne, Waypoint PointTwo)
 {
     // p(x) = c0 + c1 * x + c2 * x^2 + c3 * x^3
     // p(x) = c3 * x^3 + c2 * x^2 + c1 * x + c0
-    double *A0 = new double(0), *A1 = new double(0), *A2 = new double(0), *A3 = new double(0);
+    double* A0 = new double(0), * A1 = new double(0), * A2 = new double(0), * A3 = new double(0);
     hermite_cubic_to_power_cubic(PointOne.X, PointOne.Y, Angle2Deriv(PointOne.Angle), PointTwo.X, PointTwo.Y, Angle2Deriv(PointTwo.Angle), A0, A1, A2, A3);
     return Spline(PointOne, PointTwo, *A3, *A2, *A1, *A0);
 }
 
-Spline HermiteFinder(Waypoint PointOne, Waypoint PointTwo)
-{
-    // p(x) = c0 + c1 * x + c2 * x^2 + c3 * x^3
-    // p(x) = c3 * x^3 + c2 * x^2 + c1 * x + c0
-    double* A0 = new double(0), * A1 = new double(0), * A2 = new double(0), * A3 = new double(0);
-    hermite_cubic_to_power_cubic(PointOne.X, PointOne.Y, Angle2Deriv(PointOne.Angle), PointTwo.X, PointTwo.Y, Angle2Deriv(PointTwo.Angle), A0, A1, A2, A3);
-    return Spline(PointOne, PointTwo, *A3, *A2, *A1, *A0);
-    delete A0;
-    delete A1;
-    delete A2;
-    delete A3;
-}
+//Spline HermiteFinder(Waypoint PointOne, Waypoint PointTwo)
+//{
+//    // p(x) = c0 + c1 * x + c2 * x^2 + c3 * x^3
+//    // p(x) = c3 * x^3 + c2 * x^2 + c1 * x + c0
+//    double* A0 = new double(0), * A1 = new double(0), * A2 = new double(0), * A3 = new double(0);
+//    hermite_cubic_to_power_cubic(PointOne.X, PointOne.Y, Angle2Deriv(PointOne.Angle), PointTwo.X, PointTwo.Y, Angle2Deriv(PointTwo.Angle), A0, A1, A2, A3);
+//    return Spline(PointOne, PointTwo, *A3, *A2, *A1, *A0);
+//    delete A0;
+//    delete A1;
+//    delete A2;
+//    delete A3;
+//}
 
 //uses arc length formula to find distance
 double ArcLengthDistance(Spline TheSplineFunction)
@@ -175,48 +198,48 @@ struct Segment
 {
     double A, B, C, D, time;
     Spline spline, xSpline, ySpline;
-    double Velocity(double Seconds) 
-    {
-		if (Seconds > time)
-		{
-			return NAN;
-		}
-		else
-		{
-			double Xa = xSpline.function.A, Xb = xSpline.function.B, Xc = xSpline.function.C;
-			double Ya = ySpline.function.A, Yb = ySpline.function.B, Yc = ySpline.function.C;
-			return sqrt(pow((3 * Xa * pow(Seconds, 2)) + (2 * Xb * Seconds) + Xc, 2) + pow((3 * Ya * pow(Seconds, 2)) + (2 * Yb * Seconds) + Yc, 2));
-		}
-    }
-
-    double Acceleration(double Seconds) 
+    double Velocity(double Seconds)
     {
         if (Seconds > time)
-		{
-			return NAN;
-		}
-		else
-		{
-			double Xa = xSpline.function.A, Xb = xSpline.function.B;
-			double Ya = ySpline.function.A, Yb = ySpline.function.B;
-			// return sqrt(pow((3 * Xa * pow(Seconds, 2)) + (2 * Xb * Seconds) + Xc, 2) + pow((3 * Ya * pow(Seconds, 2)) + (2 * Yb * Seconds) + Yc, 2));
+        {
+            return NAN;
+        }
+        else
+        {
+            double Xa = xSpline.function.A, Xb = xSpline.function.B, Xc = xSpline.function.C;
+            double Ya = ySpline.function.A, Yb = ySpline.function.B, Yc = ySpline.function.C;
+            return sqrt(pow((3 * Xa * pow(Seconds, 2)) + (2 * Xb * Seconds) + Xc, 2) + pow((3 * Ya * pow(Seconds, 2)) + (2 * Yb * Seconds) + Yc, 2));
+        }
+    }
+
+    double Acceleration(double Seconds)
+    {
+        if (Seconds > time)
+        {
+            return NAN;
+        }
+        else
+        {
+            double Xa = xSpline.function.A, Xb = xSpline.function.B;
+            double Ya = ySpline.function.A, Yb = ySpline.function.B;
+            // return sqrt(pow((3 * Xa * pow(Seconds, 2)) + (2 * Xb * Seconds) + Xc, 2) + pow((3 * Ya * pow(Seconds, 2)) + (2 * Yb * Seconds) + Yc, 2));
             return sqrt(pow(((6 * Xa * Seconds) + (2 * Xb)), 2) + pow(((6 * Ya * Seconds) + (2 * Yb)), 2));
-		}
+        }
     }
 
-    double Jerk(double Seconds) 
+    double Jerk(double Seconds)
     {
         if (Seconds > time)
-		{
-			return NAN;
-		}
-		else
-		{
-			double Xa = xSpline.function.A;
-			double Ya = ySpline.function.A;
-			// return sqrt(pow((3 * Xa * pow(Seconds, 2)) + (2 * Xb * Seconds) + Xc, 2) + pow((3 * Ya * pow(Seconds, 2)) + (2 * Yb * Seconds) + Yc, 2));
+        {
+            return NAN;
+        }
+        else
+        {
+            double Xa = xSpline.function.A;
+            double Ya = ySpline.function.A;
+            // return sqrt(pow((3 * Xa * pow(Seconds, 2)) + (2 * Xb * Seconds) + Xc, 2) + pow((3 * Ya * pow(Seconds, 2)) + (2 * Yb * Seconds) + Yc, 2));
             return sqrt(pow(6 * Xa, 2) + pow(6 * Ya, 2));
-		}
+        }
     }
 
     Segment(Spline normFunc, Spline xfunc, Spline yfunc, double a, double b, double c, double d, double time) : spline(normFunc), xSpline(xfunc), ySpline(yfunc), A(a), B(b), C(c), D(d), time(time) {}
@@ -235,9 +258,11 @@ Segment GenerateSegment(Spline Function, double Jerk)
 }
 
 typedef std::vector<Segment> Trajectory;
-class TankConfig 
+class TankConfig
 {
-    public:
+public:
+    Curve curve;
+
     Trajectory leftTrajectory;
     Trajectory rightTrajectory;
 
@@ -252,64 +277,65 @@ class TankConfig
     {
         for (size_t i = 0; i < leftTrajectory.size(); i++)
         {
-            std::cout << "Left Segment " << i << "'s Values: " << leftTrajectory[i].A << " " << leftTrajectory[i].B << " " << leftTrajectory[i].C << " " << leftTrajectory[i].D << " " << leftTrajectory[i].spline.point1.X << " " << leftTrajectory[i].spline.point1.Y << "\n";        
+            std::cout << "Left Segment " << i << "'s Values: " << leftTrajectory[i].A << " " << leftTrajectory[i].B << " " << leftTrajectory[i].C << " " << leftTrajectory[i].D << " " << leftTrajectory[i].spline.point1.X << " " << leftTrajectory[i].spline.point1.Y << "\n";
         }
         for (size_t i = 0; i < rightTrajectory.size(); i++)
         {
-            std::cout << "Right Segment " << i << "'s Values: " << rightTrajectory[i].A << " " << rightTrajectory[i].B << " " << rightTrajectory[i].C << " " << rightTrajectory[i].D <<"\n";        
+            std::cout << "Right Segment " << i << "'s Values: " << rightTrajectory[i].A << " " << rightTrajectory[i].B << " " << rightTrajectory[i].C << " " << rightTrajectory[i].D << "\n";
         }
     }
 
-    TankConfig(Curve curve, double widthBetweenWheels, double jerk) 
+    TankConfig(Curve curve, double widthBetweenWheels, double jerk)
     {
+        TankConfig::curve = curve;
         leftTrajectory = Trajectory();
         rightTrajectory = Trajectory();
         double centerToWheels = widthBetweenWheels / 2;
-        for (Spline s : curve) 
+        for (Spline s : curve)
         {
             auto x1 = s.point1.X;
             auto y1 = s.point1.Y;
-            auto slope1 = (3 * s.function.A * x1 * x1) + (2 * s.function.B * x1) + (s.function.C);
+            auto slope1 = truncate((3 * s.function.A * x1 * x1) + (2 * s.function.B * x1) + (s.function.C), 10);
             auto normal1 = -1 / slope1;
             auto x2 = s.point2.X;
             auto y2 = s.point2.Y;
-            auto slope2 =(3 * s.function.A * x2 * x2) + (2 * s.function.B * x2) + (s.function.C);
+            auto slope2 = truncate((3 * s.function.A * x2 * x2) + (2 * s.function.B * x2) + (s.function.C), 10);
             auto normal2 = -1 / slope2;
 
-            auto pointSlopeForm = [](double x1, double y1, double m) 
+            auto pointSlopeForm = [](double x1, double y1, double m)
             {
                 return [x1, y1, m](double x) -> double {
                     return (m * (x - x1) + y1);
                 };
             };
-            
+
             auto normalLine1 = pointSlopeForm(x1, y1, normal1);
-            auto normalLine2 = pointSlopeForm(x2, x2, normal2);
+            auto normalLine2 = pointSlopeForm(x2, y2, normal2);
 
             double nx1, nx2, nx3, nx4, ny1, ny2, ny3, ny4;
-            
-            if (normal1 == NAN || normal1 == -INFINITY) 
+
+            if (normal1 == NAN || normal1 == -INFINITY || normal1 == -NAN || normal1 == INFINITY)
             {
-                nx1 = x1; 
+                nx1 = x1;
                 nx3 = x1;
                 if (sin(s.point1.Angle * DEGREES2RADIANS) > 0)
-                {
-                    ny1 = y1 - centerToWheels;
-                    ny3 = y1 + centerToWheels;
-                }
-                else 
                 {
                     ny1 = y1 + centerToWheels;
                     ny3 = y1 - centerToWheels;
                 }
-            } 
+                else
+                {
+                    ny1 = y1 - centerToWheels;
+                    ny3 = y1 + centerToWheels;
+                }
+            }
             else {
                 if (sin(s.point1.Angle * DEGREES2RADIANS) > 0)
                 {
                     nx1 = x1 + (centerToWheels / sqrt(1 + (normal1 * normal1)));
                     nx3 = x1 - (centerToWheels / sqrt(1 + (normal1 * normal1)));
                 }
-                else 
+                else
                 {
                     nx1 = x1 - (centerToWheels / sqrt(1 + (normal1 * normal1)));
                     nx3 = x1 + (centerToWheels / sqrt(1 + (normal1 * normal1)));
@@ -317,52 +343,44 @@ class TankConfig
                 ny1 = normalLine1(nx1);
                 ny3 = normalLine1(nx3);
             }
-            if (normal2 == NAN || normal2 == -INFINITY)
+            if (normal2 == NAN || normal2 == -INFINITY || normal2 == -NAN || normal2 == INFINITY)
             {
                 nx2 = x2;
                 nx4 = x2;
                 if (sin(s.point2.Angle * DEGREES2RADIANS) > 0)
                 {
-                    ny2 = y2 - centerToWheels;
-                    ny4 = y2 + centerToWheels;
-                }
-                else 
-                {
                     ny2 = y2 + centerToWheels;
                     ny4 = y2 - centerToWheels;
                 }
-            } 
-            else 
-            {
-                if (sin(s.point2.Angle * DEGREES2RADIANS) > 0) 
-                {
-                    nx4 = x2 - (centerToWheels / sqrt(1 + (normal2 * normal2)));
-                    nx2 = x2 + (centerToWheels / sqrt(1 + (normal2 * normal2)));
-                } 
                 else
                 {
-                    nx4 = x2 + (centerToWheels / sqrt(1 + (normal2 * normal2)));
+                    ny2 = y2 - centerToWheels;
+                    ny4 = y2 + centerToWheels;
+                }
+            }
+            else
+            {
+                if (sin(s.point2.Angle * DEGREES2RADIANS) > 0)
+                {
+                    nx2 = x2 + (centerToWheels / sqrt(1 + (normal2 * normal2)));
+                    nx4 = x2 - (centerToWheels / sqrt(1 + (normal2 * normal2)));
+                }
+                else
+                {
                     nx2 = x2 - (centerToWheels / sqrt(1 + (normal2 * normal2)));
+                    nx4 = x2 + (centerToWheels / sqrt(1 + (normal2 * normal2)));
                 }
                 ny2 = normalLine2(nx2);
                 ny4 = normalLine2(nx4);
             }
 
-
+            
             Waypoint np1 = Waypoint(nx1, ny1, s.point1.Angle), np2 = Waypoint(nx2, ny2, s.point2.Angle),
             np3 = Waypoint(nx3, ny3, s.point1.Angle), np4 = Waypoint(nx4, ny4, s.point2.Angle);
-            std::cout << "Wp1 " << x1 << " " <<  y1 << " " << s.point1.Angle << "\n";
-            std::cout << "Wp2 " << x2 << " " <<  y2 << " " << s.point2.Angle << "\n";
-            std::cout << "np1 " << np1.X << " " <<  np1.Y << " " << np1.Angle << "\n";
-            std::cout << "np2 " << np2.X << " " <<  np2.Y << " " << np2.Angle << "\n";
-            std::cout << "np3 " << np3.X << " " <<  np3.Y << " " << np3.Angle << "\n";
-            std::cout << "np4 " << np4.X << " " <<  np4.Y << " " << np4.Angle << "\n";
-            // leftSideCurve.push_back(Spline(Waypoint(nx1, ny2, s.point1.Angle), Waypoint(nx2, ny2, s.point1.Angle)));
-            // rightSideCurve.push_back(Spline(Waypoint(nx3, ny3, s.point1.Angle), Waypoint(nx4, ny4, s.point2.Angle)));
+
             auto s1 = Spline(np1, np2);
             auto s2 = Spline(np3, np4);
-            std::cout << "splines here " << s1.function.A << " " << s1.function.B << " " << s1.function.C << " " << s1.function.D << " " << s1.point1.X << " " << s1.point1.Y << "\n";
-            std::cout << "splines here " << s2.function.A << " " << s2.function.B << " " << s2.function.C << " " << s2.function.D << " " << s2.point1.X << " " << s2.point1.Y << "\n";
+
             leftTrajectory.push_back(Segment(s1, jerk));
             rightTrajectory.push_back(Segment(s2, jerk));
         }
@@ -380,4 +398,74 @@ Curve curveGenerator(Path path) {
         ReturnSpline.push_back(Temp);
     }
     return ReturnSpline;
+}
+
+//creates html file that displays desmos graph, relative location files only work if your workspace location is correct
+void createDesmosGraph(TankConfig config, std::string htmlFileLocation = "")
+{
+    using namespace std::string_literals;
+    using namespace std;
+    ofstream file;
+
+    if (htmlFileLocation.empty())
+    {
+        file.open("./graph.html");
+    }
+    else
+    {
+        file.open(htmlFileLocation);
+    }
+    file << "<!DOCTYPE html><html><head></head><style>html, body{margin: 0px; width: 100%; height: 100%}</style><body>";
+    file << u8R"(<script src="https://www.desmos.com/api/v1.5/calculator.js?apiKey=dcb31709b452b1cf9dc26972add0fda6"></script>)"s;
+
+
+    file << u8R"(<div id="calculator" style="width: 100%; height: 100%;"></div>)"s;
+
+    file << "<script>\n";
+    file << u8R"(var elt = document.getElementById('calculator');)"s << "\n" << "var calculator = Desmos.GraphingCalculator(elt);";
+
+    size_t precision = 10;
+
+    for (size_t i = 0; i < config.leftTrajectory.size(); i++)
+    {
+        auto s = config.leftTrajectory[i];
+        file << u8R"(calculator.setExpression({id: 'leftGraph)"s;
+        file << i;
+        file << u8R"(', color: Desmos.Colors.RED, latex: 'y=)"s;
+        file << fixed << setprecision(precision) << s.A << "x^3 + " << setprecision(precision) << fixed << s.B << "x^2 + " << setprecision(precision) << fixed << s.C << "x + " << setprecision(precision) << fixed << s.D;
+        file << "  \\\\left\\\\{" << setprecision(6) << min(s.spline.point1.X, s.spline.point2.X) << "<x<" << setprecision(6) << max(s.spline.point1.X, s.spline.point2.X) << "\\\\right\\\\}";
+        file << u8R"('});)"s;
+    }
+
+    for (size_t i = 0; i < config.rightTrajectory.size(); i++)
+    {
+        auto s = config.rightTrajectory[i];
+        file << u8R"(calculator.setExpression({id: 'rightGraph)"s;
+        file << i;
+        file << u8R"(', color: Desmos.Colors.BLUE, latex: 'y=)"s;
+        file << setprecision(precision) << fixed << s.A << "x^3 + " << setprecision(precision) << fixed << s.B << "x^2 + " << setprecision(precision) << fixed << s.C << "x + " << setprecision(precision) << fixed << s.D;
+        file << "  \\\\left\\\\{" << setprecision(6) << min(s.spline.point1.X, s.spline.point2.X) << "<x<" << setprecision(6) << max(s.spline.point1.X, s.spline.point2.X) << "\\\\right\\\\}";
+        file << u8R"('});)"s;
+    }
+
+    //cout << "curve size: " << config.curve.size() << "\n";
+    for (size_t i = 0; i < config.curve.size(); i++)
+    {
+        file << u8R"(calculator.setExpression({id: 'test)"s << i << "'";
+        file << u8R"(, color: Desmos.Colors.BLACK, latex: 'y=)"s;
+        file << setprecision(precision) << fixed << config.curve[i].function.A << "x^3 + " << setprecision(precision) << fixed << config.curve[i].function.B << "x^2 + " << setprecision(precision) << fixed << config.curve[i].function.C << "x + " << setprecision(precision) << fixed << config.curve[i].function.D;
+        file << "  \\\\left\\\\{" << setprecision(6) << min(config.curve[i].point1.X, config.curve[i].point2.X) << "<x<" << setprecision(6) << max(config.curve[i].point1.X, config.curve[i].point2.X) << "\\\\right\\\\}";
+        file << u8R"('});)"s;
+    }
+    file << "</script>";
+
+    // file << u8R"(
+    // <script>
+    //     var elt = document.getElementById('calculator');
+    //     var calculator = Desmos.GraphingCalculator(elt);
+    //     calculator.setExpression({ id: 'graph1', latex: 'y=x^2' });
+    // </script>
+    // )"s;
+
+    file.close();
 }
