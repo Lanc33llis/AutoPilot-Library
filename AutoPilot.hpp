@@ -162,11 +162,38 @@ Spline HermiteFinder(Waypoint PointOne, Waypoint PointTwo)
 //}
 
 //uses arc length formula to find distance
-double ArcLengthDistance(Spline TheSplineFunction)
+double ArcLengthDistance(Spline Function)
 {   //deriv = 3ax^2 + 2bx + c
-    double Ax = 3 * TheSplineFunction.function.A, Bx = 2 * TheSplineFunction.function.B, C = TheSplineFunction.function.C;
-    return abs(TheSplineFunction.point2.X - TheSplineFunction.point1.X) * (sqrt(1 + pow(pow(Ax, 2) + Bx + C, 2)));
+    //http://www2.cs.uregina.ca/~anima/408/Notes/MotionControl/AnalyticApproach.htm
+    /*
+    A = 9(Ax^2+Ay^2)
+    B = 12(Ax*Bx+Ay*By)
+    C = 6(Ax*Cx+Ay*Cy)+4*(Bx^2+By^2)
+    D = 4(Bx*Cx+By*Cy)
+    E = Cx^2+Cy^2
+    */
+    Spline XFunction = HermiteFinder(Waypoint( 0, 0, Function.point1.Angle ), Waypoint( Function.point2.X, Function.point2.X - Function.point1.X, Function.point2.Angle ));
+    Spline YFunction = HermiteFinder(Waypoint( 0, 0, Function.point1.Angle ), Waypoint( Function.point2.Y, Function.point2.Y - Function.point1.Y, Function.point2.Angle ));
 }
+
+double RealArcLengthDistance(Spline TheSplineFunction)
+{
+    double Ax = 3 * TheSplineFunction.function.A, Bx = 2 * TheSplineFunction.function.B, C = TheSplineFunction.function.C;
+}
+
+double ArcLengthDistance(Spline theSplineFunction, double lowerLimit, double upperLimit)
+{
+    theSplineFunction.point2.X = upperLimit;
+    theSplineFunction.point1.X = lowerLimit;
+    return ArcLengthDistance(theSplineFunction);
+}
+
+// double DistanceFromPointUsingArcLength(Spline theSpline, double x, double distance)
+// {
+//     //distance = (upper - lower) * √(1 + f'(x)²)
+//     double Ax = 3 * theSpline.function.A, Bx = 2 * theSpline.function.B, C = theSpline.function.C;
+//     //distance = (theSpline.point2.X - theSpline.point1.X) * √(1 + (Ax*Ax + Bx + c)²)
+// }
 
 //Time given Spline Function and Jerk
 double TimeGivenSFJ(Spline TheSplineFunction, double Jerk)
@@ -249,23 +276,32 @@ struct Segment
 
 Segment GenerateSegment(Spline Function, double Jerk)
 {
+    //TIME STARTS AT 0 THAT'S WHY FUNCTION STARTS at 0, 0
     double A, B, C, D, Time;
     Time = TimeGivenSFJ(Function, Jerk);
-    Spline XFunction = HermiteFinder(Waypoint{ 0, 0, Function.point1.Angle }, Waypoint{ Time, Function.point1.X - Function.point1.X, Function.point2.Angle });
-    Spline YFunction = HermiteFinder(Waypoint{ 0, 0, Function.point2.Angle }, Waypoint{ Time, Function.point2.Y - Function.point1.Y, Function.point2.Angle });
+    Spline XFunction = HermiteFinder(Waypoint( 0, 0, Function.point1.Angle ), Waypoint( Time, Function.point2.X - Function.point1.X, Function.point2.Angle ));
+    Spline YFunction = HermiteFinder(Waypoint( 0, 0, Function.point1.Angle ), Waypoint( Time, Function.point2.Y - Function.point1.Y, Function.point2.Angle ));
     A = Function.function.A; B = Function.function.B; C = Function.function.C; D = Function.function.D;
     return Segment(Function, XFunction, YFunction, A, B, C, D, Time);
 }
 
+//these values determine how many segments are created.
+//USING_DISTANCE_PARTION determines if a new segment is created based off distance or a equal division
+//TANK_CONFIG_PARTION_VALUE represents the distance or how many divisions to create
+bool USING_DISTANCE_PARTION = true;
+size_t TANK_CONFIG_PARTION_VALUE = .25;
+
 typedef std::vector<Segment> Trajectory;
 class TankConfig
 {
-public:
     Curve curve;
 
     Trajectory leftTrajectory;
     Trajectory rightTrajectory;
 
+    friend void createDesmosGraph(TankConfig config, std::string fileName, std::string htmlFileLocation);
+
+    public:
     template<typename SpeedControllerGroup, typename Encoder>
     void run(SpeedControllerGroup leftSide, SpeedControllerGroup rightSide, double jerk, double Kp)
     {
@@ -401,7 +437,8 @@ Curve curveGenerator(Path path) {
 }
 
 //creates html file that displays desmos graph, relative location files only work if your workspace location is correct
-void createDesmosGraph(TankConfig config, std::string htmlFileLocation = "")
+//htmlFileLocation overrides the file name
+void createDesmosGraph(TankConfig config, std::string fileName = "graph.html", std::string htmlFileLocation = "")
 {
     using namespace std::string_literals;
     using namespace std;
@@ -409,7 +446,7 @@ void createDesmosGraph(TankConfig config, std::string htmlFileLocation = "")
 
     if (htmlFileLocation.empty())
     {
-        file.open("./graph.html");
+        file.open("./" + fileName);
     }
     else
     {
@@ -459,13 +496,43 @@ void createDesmosGraph(TankConfig config, std::string htmlFileLocation = "")
     }
     file << "</script>";
 
-    // file << u8R"(
-    // <script>
-    //     var elt = document.getElementById('calculator');
-    //     var calculator = Desmos.GraphingCalculator(elt);
-    //     calculator.setExpression({ id: 'graph1', latex: 'y=x^2' });
-    // </script>
-    // )"s;
+    file.close();
+}
+
+void createDesmosGraph(Curve curve, std::string fileName = "graph.html", std::string htmlFileLocation = "")
+{
+    using namespace std::string_literals;
+    using namespace std;
+    ofstream file;
+
+    if (htmlFileLocation.empty())
+    {
+        file.open("./" + fileName);
+    }
+    else
+    {
+        file.open(htmlFileLocation);
+    }
+    file << "<!DOCTYPE html><html><head></head><style>html, body{margin: 0px; width: 100%; height: 100%}</style><body>";
+    file << u8R"(<script src="https://www.desmos.com/api/v1.5/calculator.js?apiKey=dcb31709b452b1cf9dc26972add0fda6"></script>)"s;
+
+
+    file << u8R"(<div id="calculator" style="width: 100%; height: 100%;"></div>)"s;
+
+    file << "<script>\n";
+    file << u8R"(var elt = document.getElementById('calculator');)"s << "\n" << "var calculator = Desmos.GraphingCalculator(elt);";
+
+    size_t precision = 10;
+
+    for (size_t i = 0; i < curve.size(); i++)
+    {
+        file << u8R"(calculator.setExpression({id: 'test)"s << i << "'";
+        file << u8R"(, color: Desmos.Colors.BLACK, latex: 'y=)"s;
+        file << setprecision(precision) << fixed << curve[i].function.A << "x^3 + " << setprecision(precision) << fixed << curve[i].function.B << "x^2 + " << setprecision(precision) << fixed << curve[i].function.C << "x + " << setprecision(precision) << fixed << curve[i].function.D;
+        file << "  \\\\left\\\\{" << setprecision(6) << min(curve[i].point1.X, curve[i].point2.X) << "<x<" << setprecision(6) << max(curve[i].point1.X, curve[i].point2.X) << "\\\\right\\\\}";
+        file << u8R"('});)"s;
+    }
+    file << "</script>";
 
     file.close();
 }
