@@ -162,7 +162,7 @@ Spline HermiteFinder(Waypoint PointOne, Waypoint PointTwo)
 //}
 
 //uses arc length formula to find distance
-double ArcLengthDistance(Spline Function)
+double ArcLengthDistance(Spline Function, size_t Accuracy = 30)
 {   //deriv = 3ax^2 + 2bx + c
     //http://www2.cs.uregina.ca/~anima/408/Notes/MotionControl/AnalyticApproach.htm
     /*
@@ -172,13 +172,39 @@ double ArcLengthDistance(Spline Function)
     D = 4(Bx*Cx+By*Cy)
     E = Cx^2+Cy^2
     */
-    Spline XFunction = HermiteFinder(Waypoint( 0, 0, Function.point1.Angle ), Waypoint( Function.point2.X, Function.point2.X - Function.point1.X, Function.point2.Angle ));
-    Spline YFunction = HermiteFinder(Waypoint( 0, 0, Function.point1.Angle ), Waypoint( Function.point2.Y, Function.point2.Y - Function.point1.Y, Function.point2.Angle ));
-}
+    double x1 = Function.point1.X;
+    double x2 = Function.point2.X;
 
-double RealArcLengthDistance(Spline TheSplineFunction)
-{
-    double Ax = 3 * TheSplineFunction.function.A, Bx = 2 * TheSplineFunction.function.B, C = TheSplineFunction.function.C;
+    Spline XSpline = HermiteFinder(Waypoint( 0, Function.point1.X, 45), Waypoint( Function.point2.X - Function.point1.X, Function.point2.X, 45));
+    Spline YSpline = HermiteFinder(Waypoint( 0, Function.point1.Y, Function.point1.Angle ), Waypoint( Function.point2.X - Function.point1.X, Function.point2.Y, Function.point2.Angle ));
+    auto f = [XSpline, YSpline](double u)
+    {
+        auto xfunc = XSpline.function;
+        auto yfunc = YSpline.function;
+        double Ax = xfunc.A;
+        double Bx = xfunc.B;
+        double Cx = xfunc.C;
+        double Dx = xfunc.D;
+        double Ay = yfunc.A;
+        double By = yfunc.B;
+        double Cy = yfunc.C;
+        double Dy = yfunc.D;
+        double A = 9*(Ax*Ax+Ay*Ay);
+        double B = 12*(Ax*Bx+Ay*By);
+        double C = 6*(Ax*Cx+Ay*Cy)+4*(Bx*Bx+By*By);
+        double D = 4*(Bx*Cx+By*Cy);
+        double E = Cx*Cx+Cy*Cy;
+
+        return sqrt(A*pow(u, 4) + B*pow(u, 3) + C*pow(u, 2) + D*u + E);
+    };
+
+    double arcLength = 0;
+    double h = (x2 - x1) / Accuracy;
+    for (size_t i = 1; i <= Accuracy; i++)
+    {
+        arcLength += h/2 * (f(x1+(i-1)*h) + f(x1+i*h));
+    }
+    return abs(arcLength);
 }
 
 double ArcLengthDistance(Spline theSplineFunction, double lowerLimit, double upperLimit)
@@ -470,7 +496,7 @@ void createDesmosGraph(TankConfig config, std::string fileName = "graph.html", s
         file << i;
         file << u8R"(', color: Desmos.Colors.RED, latex: 'y=)"s;
         file << fixed << setprecision(precision) << s.A << "x^3 + " << setprecision(precision) << fixed << s.B << "x^2 + " << setprecision(precision) << fixed << s.C << "x + " << setprecision(precision) << fixed << s.D;
-        file << "  \\\\left\\\\{" << setprecision(6) << min(s.spline.point1.X, s.spline.point2.X) << "<x<" << setprecision(6) << max(s.spline.point1.X, s.spline.point2.X) << "\\\\right\\\\}";
+        file << "  \\\\left\\\\{" << setprecision(6) << min(s.spline.point1.X, s.spline.point2.X) << "\\\\le x \\\\le" << setprecision(6) << max(s.spline.point1.X, s.spline.point2.X) << "\\\\right\\\\}";
         file << u8R"('});)"s;
     }
 
@@ -481,7 +507,7 @@ void createDesmosGraph(TankConfig config, std::string fileName = "graph.html", s
         file << i;
         file << u8R"(', color: Desmos.Colors.BLUE, latex: 'y=)"s;
         file << setprecision(precision) << fixed << s.A << "x^3 + " << setprecision(precision) << fixed << s.B << "x^2 + " << setprecision(precision) << fixed << s.C << "x + " << setprecision(precision) << fixed << s.D;
-        file << "  \\\\left\\\\{" << setprecision(6) << min(s.spline.point1.X, s.spline.point2.X) << "<x<" << setprecision(6) << max(s.spline.point1.X, s.spline.point2.X) << "\\\\right\\\\}";
+        file << "  \\\\left\\\\{" << setprecision(6) << min(s.spline.point1.X, s.spline.point2.X) << "\\\\le x \\\\le" << setprecision(6) << max(s.spline.point1.X, s.spline.point2.X) << "\\\\right\\\\}";
         file << u8R"('});)"s;
     }
 
@@ -491,7 +517,7 @@ void createDesmosGraph(TankConfig config, std::string fileName = "graph.html", s
         file << u8R"(calculator.setExpression({id: 'test)"s << i << "'";
         file << u8R"(, color: Desmos.Colors.BLACK, latex: 'y=)"s;
         file << setprecision(precision) << fixed << config.curve[i].function.A << "x^3 + " << setprecision(precision) << fixed << config.curve[i].function.B << "x^2 + " << setprecision(precision) << fixed << config.curve[i].function.C << "x + " << setprecision(precision) << fixed << config.curve[i].function.D;
-        file << "  \\\\left\\\\{" << setprecision(6) << min(config.curve[i].point1.X, config.curve[i].point2.X) << "<x<" << setprecision(6) << max(config.curve[i].point1.X, config.curve[i].point2.X) << "\\\\right\\\\}";
+        file << "  \\\\left\\\\{" << setprecision(6) << min(config.curve[i].point1.X, config.curve[i].point2.X) << "\\\\le x \\\\le" << setprecision(6) << max(config.curve[i].point1.X, config.curve[i].point2.X) << "\\\\right\\\\}";
         file << u8R"('});)"s;
     }
     file << "</script>";
@@ -529,7 +555,7 @@ void createDesmosGraph(Curve curve, std::string fileName = "graph.html", std::st
         file << u8R"(calculator.setExpression({id: 'test)"s << i << "'";
         file << u8R"(, color: Desmos.Colors.BLACK, latex: 'y=)"s;
         file << setprecision(precision) << fixed << curve[i].function.A << "x^3 + " << setprecision(precision) << fixed << curve[i].function.B << "x^2 + " << setprecision(precision) << fixed << curve[i].function.C << "x + " << setprecision(precision) << fixed << curve[i].function.D;
-        file << "  \\\\left\\\\{" << setprecision(6) << min(curve[i].point1.X, curve[i].point2.X) << "<x<" << setprecision(6) << max(curve[i].point1.X, curve[i].point2.X) << "\\\\right\\\\}";
+        file << "  \\\\left\\\\{" << setprecision(6) << min(curve[i].point1.X, curve[i].point2.X) << "\\\\le  x \\\\le" << setprecision(6) << max(curve[i].point1.X, curve[i].point2.X) << "\\\\right\\\\} ";
         file << u8R"('});)"s;
     }
     file << "</script>";
