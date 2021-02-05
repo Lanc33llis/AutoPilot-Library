@@ -104,9 +104,13 @@ typedef std::vector<Waypoint> Path;
 struct StandardCubicFunction
 {
     double A, B, C, D;
-    double valueAt(double x)
+    double valueAt(const double x) const
     {
         return (A * x * x * x) + (B * x * x) + (C * x) + D;
+    }
+    double derivAt(const double x) const
+    {
+        return (3*A*x*x) + (2*B*x) + (C);
     }
     StandardCubicFunction(double a, double b, double c, double d) : A(a), B(b), C(c), D(d) {}
     StandardCubicFunction() : StandardCubicFunction(0, 0, 0, 0) {}
@@ -145,7 +149,7 @@ Spline HermiteFinder(Waypoint PointOne, Waypoint PointTwo)
     // p(x) = c3 * x^3 + c2 * x^2 + c1 * x + c0
     double* A0 = new double(0), * A1 = new double(0), * A2 = new double(0), * A3 = new double(0);
     hermite_cubic_to_power_cubic(PointOne.X, PointOne.Y, Angle2Deriv(PointOne.Angle), PointTwo.X, PointTwo.Y, Angle2Deriv(PointTwo.Angle), A0, A1, A2, A3);
-    return Spline(PointOne, PointTwo, *A3, *A2, *A1, *A0);
+    return Spline(PointOne, PointTwo, truncate(*A3, 10), truncate(*A2, 10), truncate(*A1, 10), truncate(*A0, 10));
 }
 
 //Spline HermiteFinder(Waypoint PointOne, Waypoint PointTwo)
@@ -160,66 +164,53 @@ Spline HermiteFinder(Waypoint PointOne, Waypoint PointTwo)
 //    delete A2;
 //    delete A3;
 //}
+double distance(Waypoint p1, Waypoint p2)
+{
+    return std::sqrt(std::pow(p2.X - p1.X, 2) + std::pow(p2.Y - p1.Y, 2));
+}
+
+double distance(double x1, double y1, double x2, double y2)
+{
+    return distance(Waypoint(x1, y1, 0), Waypoint(x2, y2, 0));
+}
+
 
 //uses arc length formula to find distance
-double ArcLengthDistance(Spline Function, size_t Accuracy = 30)
-{   //deriv = 3ax^2 + 2bx + c
-    //http://www2.cs.uregina.ca/~anima/408/Notes/MotionControl/AnalyticApproach.htm
-    /*
-    A = 9(Ax^2+Ay^2)
-    B = 12(Ax*Bx+Ay*By)
-    C = 6(Ax*Cx+Ay*Cy)+4*(Bx^2+By^2)
-    D = 4(Bx*Cx+By*Cy)
-    E = Cx^2+Cy^2
-    */
+double ArcLengthDistance(Spline Function, size_t Accuracy = 500)
+{
     double x1 = Function.point1.X;
-    double x2 = Function.point2.X;
+    double x2 = Function.point2.X;;
 
-    Spline XSpline = HermiteFinder(Waypoint( 0, Function.point1.X, 45), Waypoint( Function.point2.X - Function.point1.X, Function.point2.X, 45));
-    Spline YSpline = HermiteFinder(Waypoint( 0, Function.point1.Y, Function.point1.Angle ), Waypoint( Function.point2.X - Function.point1.X, Function.point2.Y, Function.point2.Angle ));
-    auto f = [XSpline, YSpline](double u)
+    auto f = [Function](double x) 
     {
-        auto xfunc = XSpline.function;
-        auto yfunc = YSpline.function;
-        double Ax = xfunc.A;
-        double Bx = xfunc.B;
-        double Cx = xfunc.C;
-        double Dx = xfunc.D;
-        double Ay = yfunc.A;
-        double By = yfunc.B;
-        double Cy = yfunc.C;
-        double Dy = yfunc.D;
-        double A = 9*(Ax*Ax+Ay*Ay);
-        double B = 12*(Ax*Bx+Ay*By);
-        double C = 6*(Ax*Cx+Ay*Cy)+4*(Bx*Bx+By*By);
-        double D = 4*(Bx*Cx+By*Cy);
-        double E = Cx*Cx+Cy*Cy;
-
-        return sqrt(A*pow(u, 4) + B*pow(u, 3) + C*pow(u, 2) + D*u + E);
+        return Function.function.valueAt(x);
     };
 
     double arcLength = 0;
     double h = (x2 - x1) / Accuracy;
-    for (size_t i = 1; i <= Accuracy; i++)
+    for (size_t i = 0; i <= Accuracy; i++)
     {
-        arcLength += h/2 * (f(x1+(i-1)*h) + f(x1+i*h));
+        // arcLength += (h/2) * ((f((x1+i)*h)) + (f(x1+(i*h))));
+        std::cout << "At X Value " << x1 + (h * i) << " Y equals: " << f(h * i) << "\n";
+        auto nx1 = x1 + (h * i);
+        auto ny1 = f(x1 + (h * i));
+        auto nx2 = x1 + (h * (i + 1));
+        auto ny2 = f(x1 + h * (i + 1));
+        auto d = distance(nx1, ny1, nx2, ny2);
+        arcLength += d;
     }
-    return abs(arcLength);
+    return std::abs(arcLength);
 }
 
-double ArcLengthDistance(Spline theSplineFunction, double lowerLimit, double upperLimit)
+double ArcLengthDistance(Spline theSplineFunction, double lowerLimit, double upperLimit, size_t Accuracy = 500)
 {
-    theSplineFunction.point2.X = upperLimit;
-    theSplineFunction.point1.X = lowerLimit;
-    return ArcLengthDistance(theSplineFunction);
+    auto p1 = Waypoint(lowerLimit, theSplineFunction.function.valueAt(lowerLimit), std::atan(theSplineFunction.function.derivAt(lowerLimit)) * RADIANS2DEGREES);
+    auto p2 = Waypoint(upperLimit, theSplineFunction.function.valueAt(upperLimit), std::atan(theSplineFunction.function.derivAt(upperLimit)) * RADIANS2DEGREES);
+    auto s = HermiteFinder(p1, p2);
+    return ArcLengthDistance(
+        HermiteFinder(p1, p2), Accuracy
+    );
 }
-
-// double DistanceFromPointUsingArcLength(Spline theSpline, double x, double distance)
-// {
-//     //distance = (upper - lower) * √(1 + f'(x)²)
-//     double Ax = 3 * theSpline.function.A, Bx = 2 * theSpline.function.B, C = theSpline.function.C;
-//     //distance = (theSpline.point2.X - theSpline.point1.X) * √(1 + (Ax*Ax + Bx + c)²)
-// }
 
 //Time given Spline Function and Jerk
 double TimeGivenSFJ(Spline TheSplineFunction, double Jerk)
@@ -355,6 +346,10 @@ class TankConfig
         double centerToWheels = widthBetweenWheels / 2;
         for (Spline s : curve)
         {
+            double length = ArcLengthDistance(s);
+            double cuts = lenght / 10;
+            //use arc length to find out how many partions. 1m = 10 cuts
+
             auto x1 = s.point1.X;
             auto y1 = s.point1.Y;
             auto slope1 = truncate((3 * s.function.A * x1 * x1) + (2 * s.function.B * x1) + (s.function.C), 10);
