@@ -99,6 +99,18 @@ struct Waypoint
     Waypoint() : Waypoint(0, 0, 0) {}
 };
 
+inline bool operator == (const Waypoint& lhs, const Waypoint& rhs)
+{
+    if (lhs.X == rhs.X && lhs.Y == rhs.Y && lhs.Angle == rhs.Angle)
+    {
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+
 typedef std::vector<Waypoint> Path;
 
 struct StandardCubicFunction
@@ -125,7 +137,7 @@ struct Spline
     Spline(Waypoint p1, Waypoint p2, double A, double B, double C, double D) : point1(p1), point2(p2), function(StandardCubicFunction(A, B, C, D)) {}
     Spline(Waypoint p1, Waypoint p2, StandardCubicFunction func) : point1(p1), point2(p2), function(func) {}
     Spline(Waypoint p1, Waypoint p2) : Spline(HermiteFinder(p1, p2)) {}
-    Spline() : Spline(HermiteFinder(Waypoint(0, 0, 0), Waypoint(0, 0, 0))) {}
+    Spline() : Spline(Waypoint(0, 0, 0), Waypoint(0, 0, 0),  0, 0, 0, 0) {}
 };
 
 typedef std::vector<Spline> Curve;
@@ -147,6 +159,10 @@ Spline HermiteFinder(Waypoint PointOne, Waypoint PointTwo)
 {
     // p(x) = c0 + c1 * x + c2 * x^2 + c3 * x^3
     // p(x) = c3 * x^3 + c2 * x^2 + c1 * x + c0
+    if (PointOne == PointTwo)
+    {
+        return Spline();
+    }
     double* A0 = new double(0), * A1 = new double(0), * A2 = new double(0), * A3 = new double(0);
     hermite_cubic_to_power_cubic(PointOne.X, PointOne.Y, Angle2Deriv(PointOne.Angle), PointTwo.X, PointTwo.Y, Angle2Deriv(PointTwo.Angle), A0, A1, A2, A3);
     return Spline(PointOne, PointTwo, truncate(*A3, 10), truncate(*A2, 10), truncate(*A1, 10), truncate(*A0, 10));
@@ -191,7 +207,7 @@ double ArcLengthDistance(Spline Function, size_t Accuracy = 500)
     for (size_t i = 0; i <= Accuracy; i++)
     {
         // arcLength += (h/2) * ((f((x1+i)*h)) + (f(x1+(i*h))));
-        std::cout << "At X Value " << x1 + (h * i) << " Y equals: " << f(h * i) << "\n";
+        // std::cout << "At X Value " << x1 + (h * i) << " Y equals: " << f(h * i) << "\n";
         auto nx1 = x1 + (h * i);
         auto ny1 = f(x1 + (h * i));
         auto nx2 = x1 + (h * (i + 1));
@@ -210,6 +226,39 @@ double ArcLengthDistance(Spline theSplineFunction, double lowerLimit, double upp
     return ArcLengthDistance(
         HermiteFinder(p1, p2), Accuracy
     );
+}
+
+//Parametrizes the cubic function to use arc length and returns the x value arcLength away
+double ArcLengthToXValue(Spline spline, double x, double arcLength, const double increment = .01, size_t arcLengthAccuracy = 1000)
+{
+    bool negative = false;
+    if (arcLength < 0)
+    {
+        negative = true;
+    }
+
+    double i = x;
+    if (arcLength == 0)
+    {
+        return 0;
+    }
+
+    if (negative)
+    {
+        while (ArcLengthDistance(spline, i, x, arcLengthAccuracy) <= -arcLength)
+        {
+            i -= increment;
+        }
+    }
+    else
+    {
+        while (ArcLengthDistance(spline, x, i, arcLengthAccuracy) <= arcLength)
+        {
+            i += increment;
+        }
+    }
+
+    return i;
 }
 
 //Time given Spline Function and Jerk
@@ -328,6 +377,7 @@ class TankConfig
 
     void testTrajectory()
     {
+        std::cout << "working" << "\n";
         for (size_t i = 0; i < leftTrajectory.size(); i++)
         {
             std::cout << "Left Segment " << i << "'s Values: " << leftTrajectory[i].A << " " << leftTrajectory[i].B << " " << leftTrajectory[i].C << " " << leftTrajectory[i].D << " " << leftTrajectory[i].spline.point1.X << " " << leftTrajectory[i].spline.point1.Y << "\n";
@@ -347,99 +397,201 @@ class TankConfig
         for (Spline s : curve)
         {
             double length = ArcLengthDistance(s);
-            double cuts = lenght / 10;
-            //use arc length to find out how many partions. 1m = 10 cuts
+            int cuts = length * 10;
 
             auto x1 = s.point1.X;
             auto y1 = s.point1.Y;
-            auto slope1 = truncate((3 * s.function.A * x1 * x1) + (2 * s.function.B * x1) + (s.function.C), 10);
-            auto normal1 = -1 / slope1;
             auto x2 = s.point2.X;
             auto y2 = s.point2.Y;
-            auto slope2 = truncate((3 * s.function.A * x2 * x2) + (2 * s.function.B * x2) + (s.function.C), 10);
-            auto normal2 = -1 / slope2;
 
-            auto pointSlopeForm = [](double x1, double y1, double m)
+            for (int i = 0; i < cuts; i++)
             {
-                return [x1, y1, m](double x) -> double {
-                    return (m * (x - x1) + y1);
+                //worry about neg functions later
+                //this is very strange
+                double test1 = (i * (length / cuts));
+                double test2 = ((i + 1) * (length / cuts));
+                auto cx1 = truncate(ArcLengthToXValue(s, x1, (i * (length / cuts))), 10);
+                auto cy1 = truncate(s.function.valueAt(cx1), 10);
+                auto cx2 = truncate(ArcLengthToXValue(s, x1,((i+1) * (length / cuts))), 10);
+                auto cy2 = truncate(s.function.valueAt(cx2), 10);
+
+                // auto slope1 = truncate((3 * s.function.A * x1 * x1) + (2 * s.function.B * x1) + (s.function.C), 10);
+                auto slope1 = truncate(s.function.derivAt(cx1), 10);
+                auto normal1 = -1 / slope1;
+                // auto slope2 = truncate((3 * s.function.A * x2 * x2) + (2 * s.function.B * x2) + (s.function.C), 10);
+                auto slope2 = truncate(s.function.derivAt(cx2), 10);
+                auto normal2 = -1 / slope2;
+
+                auto pointSlopeForm = [](double x1, double y1, double m)
+                {
+                    return [x1, y1, m](double x) -> double {
+                        return (m * (x - x1) + y1);
+                    };
                 };
-            };
 
-            auto normalLine1 = pointSlopeForm(x1, y1, normal1);
-            auto normalLine2 = pointSlopeForm(x2, y2, normal2);
+                auto normalLine1 = pointSlopeForm(cx1, cy1, normal1);
+                auto normalLine2 = pointSlopeForm(cx2, cy2, normal2);
 
-            double nx1, nx2, nx3, nx4, ny1, ny2, ny3, ny4;
+                double nx1, nx2, nx3, nx4, ny1, ny2, ny3, ny4;
 
-            if (normal1 == NAN || normal1 == -INFINITY || normal1 == -NAN || normal1 == INFINITY)
-            {
-                nx1 = x1;
-                nx3 = x1;
-                if (sin(s.point1.Angle * DEGREES2RADIANS) > 0)
+                if (normal1 == NAN || normal1 == -INFINITY || normal1 == -NAN || normal1 == INFINITY)
                 {
-                    ny1 = y1 + centerToWheels;
-                    ny3 = y1 - centerToWheels;
+                    nx1 = cx1;
+                    nx3 = cx1;
+                    if (sin(s.point1.Angle * DEGREES2RADIANS) > 0)
+                    {
+                        ny1 = cy1 + centerToWheels;
+                        ny3 = cy1 - centerToWheels;
+                    }
+                    else
+                    {
+                        ny1 = cy1 - centerToWheels;
+                        ny3 = cy1 + centerToWheels;
+                    }
+                }
+                else {
+                    if (sin(s.point1.Angle * DEGREES2RADIANS) > 0)
+                    {
+                        nx1 = cx1 + (centerToWheels / sqrt(1 + (normal1 * normal1)));
+                        nx3 = cx1 - (centerToWheels / sqrt(1 + (normal1 * normal1)));
+                    }
+                    else
+                    {
+                        nx1 = cx1 - (centerToWheels / sqrt(1 + (normal1 * normal1)));
+                        nx3 = cx1 + (centerToWheels / sqrt(1 + (normal1 * normal1)));
+                    }
+                    ny1 = normalLine1(nx1);
+                    ny3 = normalLine1(nx3);
+                }
+                if (normal2 == NAN || normal2 == -INFINITY || normal2 == -NAN || normal2 == INFINITY)
+                {
+                    nx2 = cx2;
+                    nx4 = cx2;
+                    if (sin(s.point2.Angle * DEGREES2RADIANS) > 0)
+                    {
+                        ny2 = cy2 + centerToWheels;
+                        ny4 = cy2 - centerToWheels;
+                    }
+                    else
+                    {
+                        ny2 = cy2 - centerToWheels;
+                        ny4 = cy2 + centerToWheels;
+                    }
                 }
                 else
                 {
-                    ny1 = y1 - centerToWheels;
-                    ny3 = y1 + centerToWheels;
+                    if (sin(s.point2.Angle * DEGREES2RADIANS) > 0)
+                    {
+                        nx2 = cx2 + (centerToWheels / sqrt(1 + (normal2 * normal2)));
+                        nx4 = cx2 - (centerToWheels / sqrt(1 + (normal2 * normal2)));
+                    }
+                    else
+                    {
+                        nx2 = cx2 - (centerToWheels / sqrt(1 + (normal2 * normal2)));
+                        nx4 = cx2 + (centerToWheels / sqrt(1 + (normal2 * normal2)));
+                    }
+                    ny2 = normalLine2(nx2);
+                    ny4 = normalLine2(nx4);
                 }
-            }
-            else {
-                if (sin(s.point1.Angle * DEGREES2RADIANS) > 0)
-                {
-                    nx1 = x1 + (centerToWheels / sqrt(1 + (normal1 * normal1)));
-                    nx3 = x1 - (centerToWheels / sqrt(1 + (normal1 * normal1)));
-                }
-                else
-                {
-                    nx1 = x1 - (centerToWheels / sqrt(1 + (normal1 * normal1)));
-                    nx3 = x1 + (centerToWheels / sqrt(1 + (normal1 * normal1)));
-                }
-                ny1 = normalLine1(nx1);
-                ny3 = normalLine1(nx3);
-            }
-            if (normal2 == NAN || normal2 == -INFINITY || normal2 == -NAN || normal2 == INFINITY)
-            {
-                nx2 = x2;
-                nx4 = x2;
-                if (sin(s.point2.Angle * DEGREES2RADIANS) > 0)
-                {
-                    ny2 = y2 + centerToWheels;
-                    ny4 = y2 - centerToWheels;
-                }
-                else
-                {
-                    ny2 = y2 - centerToWheels;
-                    ny4 = y2 + centerToWheels;
-                }
-            }
-            else
-            {
-                if (sin(s.point2.Angle * DEGREES2RADIANS) > 0)
-                {
-                    nx2 = x2 + (centerToWheels / sqrt(1 + (normal2 * normal2)));
-                    nx4 = x2 - (centerToWheels / sqrt(1 + (normal2 * normal2)));
-                }
-                else
-                {
-                    nx2 = x2 - (centerToWheels / sqrt(1 + (normal2 * normal2)));
-                    nx4 = x2 + (centerToWheels / sqrt(1 + (normal2 * normal2)));
-                }
-                ny2 = normalLine2(nx2);
-                ny4 = normalLine2(nx4);
-            }
+
+                Waypoint np1 = Waypoint(nx1, ny1, s.point1.Angle), np2 = Waypoint(nx2, ny2, s.point2.Angle),
+                np3 = Waypoint(nx3, ny3, s.point1.Angle), np4 = Waypoint(nx4, ny4, s.point2.Angle);
+
+                auto s1 = Spline(np1, np2);
+                auto s2 = Spline(np3, np4);
+
+                leftTrajectory.push_back(Segment(s1, jerk));
+                rightTrajectory.push_back(Segment(s2, jerk));
+            }       
+            //use arc length to find out how many partions. 1m = 10 cuts
+
+            // auto slope1 = truncate((3 * s.function.A * x1 * x1) + (2 * s.function.B * x1) + (s.function.C), 10);
+            // auto normal1 = -1 / slope1;
+            // auto slope2 = truncate((3 * s.function.A * x2 * x2) + (2 * s.function.B * x2) + (s.function.C), 10);
+            // auto normal2 = -1 / slope2;
+
+            // auto pointSlopeForm = [](double x1, double y1, double m)
+            // {
+            //     return [x1, y1, m](double x) -> double {
+            //         return (m * (x - x1) + y1);
+            //     };
+            // };
+
+            // auto normalLine1 = pointSlopeForm(x1, y1, normal1);
+            // auto normalLine2 = pointSlopeForm(x2, y2, normal2);
+
+
+            // double nx1, nx2, nx3, nx4, ny1, ny2, ny3, ny4;
+
+            // if (normal1 == NAN || normal1 == -INFINITY || normal1 == -NAN || normal1 == INFINITY)
+            // {
+            //     nx1 = x1;
+            //     nx3 = x1;
+            //     if (sin(s.point1.Angle * DEGREES2RADIANS) > 0)
+            //     {
+            //         ny1 = y1 + centerToWheels;
+            //         ny3 = y1 - centerToWheels;
+            //     }
+            //     else
+            //     {
+            //         ny1 = y1 - centerToWheels;
+            //         ny3 = y1 + centerToWheels;
+            //     }
+            // }
+            // else {
+            //     if (sin(s.point1.Angle * DEGREES2RADIANS) > 0)
+            //     {
+            //         nx1 = x1 + (centerToWheels / sqrt(1 + (normal1 * normal1)));
+            //         nx3 = x1 - (centerToWheels / sqrt(1 + (normal1 * normal1)));
+            //     }
+            //     else
+            //     {
+            //         nx1 = x1 - (centerToWheels / sqrt(1 + (normal1 * normal1)));
+            //         nx3 = x1 + (centerToWheels / sqrt(1 + (normal1 * normal1)));
+            //     }
+            //     ny1 = normalLine1(nx1);
+            //     ny3 = normalLine1(nx3);
+            // }
+            // if (normal2 == NAN || normal2 == -INFINITY || normal2 == -NAN || normal2 == INFINITY)
+            // {
+            //     nx2 = x2;
+            //     nx4 = x2;
+            //     if (sin(s.point2.Angle * DEGREES2RADIANS) > 0)
+            //     {
+            //         ny2 = y2 + centerToWheels;
+            //         ny4 = y2 - centerToWheels;
+            //     }
+            //     else
+            //     {
+            //         ny2 = y2 - centerToWheels;
+            //         ny4 = y2 + centerToWheels;
+            //     }
+            // }
+            // else
+            // {
+            //     if (sin(s.point2.Angle * DEGREES2RADIANS) > 0)
+            //     {
+            //         nx2 = x2 + (centerToWheels / sqrt(1 + (normal2 * normal2)));
+            //         nx4 = x2 - (centerToWheels / sqrt(1 + (normal2 * normal2)));
+            //     }
+            //     else
+            //     {
+            //         nx2 = x2 - (centerToWheels / sqrt(1 + (normal2 * normal2)));
+            //         nx4 = x2 + (centerToWheels / sqrt(1 + (normal2 * normal2)));
+            //     }
+            //     ny2 = normalLine2(nx2);
+            //     ny4 = normalLine2(nx4);
+            // }
 
             
-            Waypoint np1 = Waypoint(nx1, ny1, s.point1.Angle), np2 = Waypoint(nx2, ny2, s.point2.Angle),
-            np3 = Waypoint(nx3, ny3, s.point1.Angle), np4 = Waypoint(nx4, ny4, s.point2.Angle);
+            // Waypoint np1 = Waypoint(nx1, ny1, s.point1.Angle), np2 = Waypoint(nx2, ny2, s.point2.Angle),
+            // np3 = Waypoint(nx3, ny3, s.point1.Angle), np4 = Waypoint(nx4, ny4, s.point2.Angle);
 
-            auto s1 = Spline(np1, np2);
-            auto s2 = Spline(np3, np4);
+            // auto s1 = Spline(np1, np2);
+            // auto s2 = Spline(np3, np4);
 
-            leftTrajectory.push_back(Segment(s1, jerk));
-            rightTrajectory.push_back(Segment(s2, jerk));
+            // leftTrajectory.push_back(Segment(s1, jerk));
+            // rightTrajectory.push_back(Segment(s2, jerk));
         }
     }
 };
