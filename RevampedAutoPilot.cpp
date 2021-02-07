@@ -8,9 +8,9 @@ string laptop = "C:\\Users\\Lance\\Documents\\AutoPilot-Library\\";
 int main() {
     cout << "Tesing AP\n";
     cout.precision(10);
-    Path path = {Waypoint(0, 0, 0), Waypoint(1, 1, 0)};
+    Path path = {Waypoint(0, 0, 0), Waypoint(1, 2, 0), Waypoint(3, 4, 0), Waypoint(5, 0, 0)};
     auto curve = curveGenerator(path);
-    TankConfig drive(curve, 2, 2);
+    TankConfig drive(curve, 2, 1);
     // drive.testTrajectory();
     createDesmosGraph(drive, "", desktop + "graph.html");
     // Spline XSpline = HermiteFinder(Waypoint( 0, path[0].X, 45), Waypoint( path[1].X - path[0].X, path[1].X, 45));
@@ -21,9 +21,6 @@ int main() {
     // cout << "ArcLengthToXValue Test: " << ArcLengthToXValue(curve[0], 1, -.25) << "\n";
     // cout << "Distance test: " << distance(0, 0, 2, 3    ) << "\n";
     return 0;
-
-    //
 }
 
-//probably partion curve into many different segments to maintain width between wheels
-//don't know what coordinate funtions r
+//maybe do a bit of automation for increased smoothness. get linear slope between two slopes and like use that instead of user input if not given

@@ -116,15 +116,16 @@ typedef std::vector<Waypoint> Path;
 struct StandardCubicFunction
 {
     double A, B, C, D;
+    double translateX, translateY;
     double valueAt(const double x) const
     {
-        return (A * x * x * x) + (B * x * x) + (C * x) + D;
+        return (A * std::pow(x - translateX, 3)) + (B * std::pow(x - translateX, 2)) + (C * (x - translateX)) + (D + translateY);
     }
     double derivAt(const double x) const
     {
-        return (3*A*x*x) + (2*B*x) + (C);
+        return (3*A*std::pow(x - translateX, 2)) + (2*B*(x - translateX)) + (C);
     }
-    StandardCubicFunction(double a, double b, double c, double d) : A(a), B(b), C(c), D(d) {}
+    StandardCubicFunction(double a, double b, double c, double d, double tx = 0, double ty = 0) : A(a), B(b), C(c), D(d), translateX(tx), translateY(ty) {}
     StandardCubicFunction() : StandardCubicFunction(0, 0, 0, 0) {}
 };
 
@@ -134,7 +135,17 @@ struct Spline
 {
     Waypoint point1, point2;
     StandardCubicFunction function;
-    Spline(Waypoint p1, Waypoint p2, double A, double B, double C, double D) : point1(p1), point2(p2), function(StandardCubicFunction(A, B, C, D)) {}
+    //accounts for tx & ty
+    Waypoint realPoint1() 
+    {
+        return Waypoint(point1.X - function.translateX, point1.Y + function.translateY, point1.Angle);
+    }
+
+    Waypoint realPoint2() 
+    {
+        return Waypoint(point2.X - function.translateX, point2.Y + function.translateY, point2.Angle);
+    }
+    Spline(Waypoint p1, Waypoint p2, double A, double B, double C, double D, double tx = 0, double ty = 0) : point1(p1), point2(p2), function(StandardCubicFunction(A, B, C, D, tx, ty)) {}
     Spline(Waypoint p1, Waypoint p2, StandardCubicFunction func) : point1(p1), point2(p2), function(func) {}
     Spline(Waypoint p1, Waypoint p2) : Spline(HermiteFinder(p1, p2)) {}
     Spline() : Spline(Waypoint(0, 0, 0), Waypoint(0, 0, 0),  0, 0, 0, 0) {}
@@ -229,7 +240,7 @@ double ArcLengthDistance(Spline theSplineFunction, double lowerLimit, double upp
 }
 
 //Parametrizes the cubic function to use arc length and returns the x value arcLength away
-double ArcLengthToXValue(Spline spline, double x, double arcLength, const double increment = .01, size_t arcLengthAccuracy = 1000)
+double ArcLengthToXValue(Spline spline, double x, double arcLength, const double increment = .01, size_t arcLengthAccuracy = 2500)
 {
     bool negative = false;
     if (arcLength < 0)
@@ -396,203 +407,101 @@ class TankConfig
         double centerToWheels = widthBetweenWheels / 2;
         for (Spline s : curve)
         {
-            double length = ArcLengthDistance(s);
-            int cuts = length * 10;
-
             auto x1 = s.point1.X;
             auto y1 = s.point1.Y;
             auto x2 = s.point2.X;
             auto y2 = s.point2.Y;
 
-            for (int i = 0; i < cuts; i++)
+            auto slope1 = truncate((3 * s.function.A * x1 * x1) + (2 * s.function.B * x1) + (s.function.C), 10);
+            auto normal1 = -1 / slope1;
+            auto slope2 = truncate((3 * s.function.A * x2 * x2) + (2 * s.function.B * x2) + (s.function.C), 10);
+            auto normal2 = -1 / slope2;
+
+            auto pointSlopeForm = [](double x1, double y1, double m)
             {
-                //worry about neg functions later
-                //this is very strange
-                double test1 = (i * (length / cuts));
-                double test2 = ((i + 1) * (length / cuts));
-                auto cx1 = truncate(ArcLengthToXValue(s, x1, (i * (length / cuts))), 10);
-                auto cy1 = truncate(s.function.valueAt(cx1), 10);
-                auto cx2 = truncate(ArcLengthToXValue(s, x1,((i+1) * (length / cuts))), 10);
-                auto cy2 = truncate(s.function.valueAt(cx2), 10);
-
-                // auto slope1 = truncate((3 * s.function.A * x1 * x1) + (2 * s.function.B * x1) + (s.function.C), 10);
-                auto slope1 = truncate(s.function.derivAt(cx1), 10);
-                auto normal1 = -1 / slope1;
-                // auto slope2 = truncate((3 * s.function.A * x2 * x2) + (2 * s.function.B * x2) + (s.function.C), 10);
-                auto slope2 = truncate(s.function.derivAt(cx2), 10);
-                auto normal2 = -1 / slope2;
-
-                auto pointSlopeForm = [](double x1, double y1, double m)
-                {
-                    return [x1, y1, m](double x) -> double {
-                        return (m * (x - x1) + y1);
-                    };
+                return [x1, y1, m](double x) -> double {
+                    return (m * (x - x1) + y1);
                 };
+            };
 
-                auto normalLine1 = pointSlopeForm(cx1, cy1, normal1);
-                auto normalLine2 = pointSlopeForm(cx2, cy2, normal2);
+            auto normalLine1 = pointSlopeForm(x1, y1, normal1);
+            auto normalLine2 = pointSlopeForm(x2, y2, normal2);
 
-                double nx1, nx2, nx3, nx4, ny1, ny2, ny3, ny4;
 
-                if (normal1 == NAN || normal1 == -INFINITY || normal1 == -NAN || normal1 == INFINITY)
+            double nx1, nx2, nx3, nx4, ny1, ny2, ny3, ny4;
+
+            if (normal1 == NAN || normal1 == -INFINITY || normal1 == -NAN || normal1 == INFINITY)
+            {
+                nx1 = x1;
+                nx3 = x1;
+                if (sin(s.point1.Angle * DEGREES2RADIANS) > 0)
                 {
-                    nx1 = cx1;
-                    nx3 = cx1;
-                    if (sin(s.point1.Angle * DEGREES2RADIANS) > 0)
-                    {
-                        ny1 = cy1 + centerToWheels;
-                        ny3 = cy1 - centerToWheels;
-                    }
-                    else
-                    {
-                        ny1 = cy1 - centerToWheels;
-                        ny3 = cy1 + centerToWheels;
-                    }
-                }
-                else {
-                    if (sin(s.point1.Angle * DEGREES2RADIANS) > 0)
-                    {
-                        nx1 = cx1 + (centerToWheels / sqrt(1 + (normal1 * normal1)));
-                        nx3 = cx1 - (centerToWheels / sqrt(1 + (normal1 * normal1)));
-                    }
-                    else
-                    {
-                        nx1 = cx1 - (centerToWheels / sqrt(1 + (normal1 * normal1)));
-                        nx3 = cx1 + (centerToWheels / sqrt(1 + (normal1 * normal1)));
-                    }
-                    ny1 = normalLine1(nx1);
-                    ny3 = normalLine1(nx3);
-                }
-                if (normal2 == NAN || normal2 == -INFINITY || normal2 == -NAN || normal2 == INFINITY)
-                {
-                    nx2 = cx2;
-                    nx4 = cx2;
-                    if (sin(s.point2.Angle * DEGREES2RADIANS) > 0)
-                    {
-                        ny2 = cy2 + centerToWheels;
-                        ny4 = cy2 - centerToWheels;
-                    }
-                    else
-                    {
-                        ny2 = cy2 - centerToWheels;
-                        ny4 = cy2 + centerToWheels;
-                    }
+                    ny1 = y1 + centerToWheels;
+                    ny3 = y1 - centerToWheels;
                 }
                 else
                 {
-                    if (sin(s.point2.Angle * DEGREES2RADIANS) > 0)
-                    {
-                        nx2 = cx2 + (centerToWheels / sqrt(1 + (normal2 * normal2)));
-                        nx4 = cx2 - (centerToWheels / sqrt(1 + (normal2 * normal2)));
-                    }
-                    else
-                    {
-                        nx2 = cx2 - (centerToWheels / sqrt(1 + (normal2 * normal2)));
-                        nx4 = cx2 + (centerToWheels / sqrt(1 + (normal2 * normal2)));
-                    }
-                    ny2 = normalLine2(nx2);
-                    ny4 = normalLine2(nx4);
+                    ny1 = y1 - centerToWheels;
+                    ny3 = y1 + centerToWheels;
                 }
-
-                Waypoint np1 = Waypoint(nx1, ny1, s.point1.Angle), np2 = Waypoint(nx2, ny2, s.point2.Angle),
-                np3 = Waypoint(nx3, ny3, s.point1.Angle), np4 = Waypoint(nx4, ny4, s.point2.Angle);
-
-                auto s1 = Spline(np1, np2);
-                auto s2 = Spline(np3, np4);
-
-                leftTrajectory.push_back(Segment(s1, jerk));
-                rightTrajectory.push_back(Segment(s2, jerk));
-            }       
-            //use arc length to find out how many partions. 1m = 10 cuts
-
-            // auto slope1 = truncate((3 * s.function.A * x1 * x1) + (2 * s.function.B * x1) + (s.function.C), 10);
-            // auto normal1 = -1 / slope1;
-            // auto slope2 = truncate((3 * s.function.A * x2 * x2) + (2 * s.function.B * x2) + (s.function.C), 10);
-            // auto normal2 = -1 / slope2;
-
-            // auto pointSlopeForm = [](double x1, double y1, double m)
-            // {
-            //     return [x1, y1, m](double x) -> double {
-            //         return (m * (x - x1) + y1);
-            //     };
-            // };
-
-            // auto normalLine1 = pointSlopeForm(x1, y1, normal1);
-            // auto normalLine2 = pointSlopeForm(x2, y2, normal2);
-
-
-            // double nx1, nx2, nx3, nx4, ny1, ny2, ny3, ny4;
-
-            // if (normal1 == NAN || normal1 == -INFINITY || normal1 == -NAN || normal1 == INFINITY)
-            // {
-            //     nx1 = x1;
-            //     nx3 = x1;
-            //     if (sin(s.point1.Angle * DEGREES2RADIANS) > 0)
-            //     {
-            //         ny1 = y1 + centerToWheels;
-            //         ny3 = y1 - centerToWheels;
-            //     }
-            //     else
-            //     {
-            //         ny1 = y1 - centerToWheels;
-            //         ny3 = y1 + centerToWheels;
-            //     }
-            // }
-            // else {
-            //     if (sin(s.point1.Angle * DEGREES2RADIANS) > 0)
-            //     {
-            //         nx1 = x1 + (centerToWheels / sqrt(1 + (normal1 * normal1)));
-            //         nx3 = x1 - (centerToWheels / sqrt(1 + (normal1 * normal1)));
-            //     }
-            //     else
-            //     {
-            //         nx1 = x1 - (centerToWheels / sqrt(1 + (normal1 * normal1)));
-            //         nx3 = x1 + (centerToWheels / sqrt(1 + (normal1 * normal1)));
-            //     }
-            //     ny1 = normalLine1(nx1);
-            //     ny3 = normalLine1(nx3);
-            // }
-            // if (normal2 == NAN || normal2 == -INFINITY || normal2 == -NAN || normal2 == INFINITY)
-            // {
-            //     nx2 = x2;
-            //     nx4 = x2;
-            //     if (sin(s.point2.Angle * DEGREES2RADIANS) > 0)
-            //     {
-            //         ny2 = y2 + centerToWheels;
-            //         ny4 = y2 - centerToWheels;
-            //     }
-            //     else
-            //     {
-            //         ny2 = y2 - centerToWheels;
-            //         ny4 = y2 + centerToWheels;
-            //     }
-            // }
-            // else
-            // {
-            //     if (sin(s.point2.Angle * DEGREES2RADIANS) > 0)
-            //     {
-            //         nx2 = x2 + (centerToWheels / sqrt(1 + (normal2 * normal2)));
-            //         nx4 = x2 - (centerToWheels / sqrt(1 + (normal2 * normal2)));
-            //     }
-            //     else
-            //     {
-            //         nx2 = x2 - (centerToWheels / sqrt(1 + (normal2 * normal2)));
-            //         nx4 = x2 + (centerToWheels / sqrt(1 + (normal2 * normal2)));
-            //     }
-            //     ny2 = normalLine2(nx2);
-            //     ny4 = normalLine2(nx4);
-            // }
+            }
+            else {
+                if (sin(s.point1.Angle * DEGREES2RADIANS) > 0)
+                {
+                    nx1 = x1 + (centerToWheels / sqrt(1 + (normal1 * normal1)));
+                    nx3 = x1 - (centerToWheels / sqrt(1 + (normal1 * normal1)));
+                }
+                else
+                {
+                    nx1 = x1 - (centerToWheels / sqrt(1 + (normal1 * normal1)));
+                    nx3 = x1 + (centerToWheels / sqrt(1 + (normal1 * normal1)));
+                }
+                ny1 = normalLine1(nx1);
+                ny3 = normalLine1(nx3);
+            }
+            if (normal2 == NAN || normal2 == -INFINITY || normal2 == -NAN || normal2 == INFINITY)
+            {
+                nx2 = x2;
+                nx4 = x2;
+                if (sin(s.point2.Angle * DEGREES2RADIANS) > 0)
+                {
+                    ny2 = y2 + centerToWheels;
+                    ny4 = y2 - centerToWheels;
+                }
+                else
+                {
+                    ny2 = y2 - centerToWheels;
+                    ny4 = y2 + centerToWheels;
+                }
+            }
+            else
+            {
+                if (sin(s.point2.Angle * DEGREES2RADIANS) > 0)
+                {
+                    nx2 = x2 + (centerToWheels / sqrt(1 + (normal2 * normal2)));
+                    nx4 = x2 - (centerToWheels / sqrt(1 + (normal2 * normal2)));
+                }
+                else
+                {
+                    nx2 = x2 - (centerToWheels / sqrt(1 + (normal2 * normal2)));
+                    nx4 = x2 + (centerToWheels / sqrt(1 + (normal2 * normal2)));
+                }
+                ny2 = normalLine2(nx2);
+                ny4 = normalLine2(nx4);
+            }
 
             
-            // Waypoint np1 = Waypoint(nx1, ny1, s.point1.Angle), np2 = Waypoint(nx2, ny2, s.point2.Angle),
-            // np3 = Waypoint(nx3, ny3, s.point1.Angle), np4 = Waypoint(nx4, ny4, s.point2.Angle);
+            Waypoint np1 = Waypoint(nx1, ny1, s.point1.Angle), np2 = Waypoint(nx2, ny2, s.point2.Angle),
+            np3 = Waypoint(nx3, ny3, s.point1.Angle), np4 = Waypoint(nx4, ny4, s.point2.Angle);
 
-            // auto s1 = Spline(np1, np2);
-            // auto s2 = Spline(np3, np4);
+            auto s1 = Spline(np1, np2);
+            auto s2 = Spline(np3, np4);
 
-            // leftTrajectory.push_back(Segment(s1, jerk));
-            // rightTrajectory.push_back(Segment(s2, jerk));
-        }
+            leftTrajectory.push_back(Segment(s1, jerk));
+            rightTrajectory.push_back(Segment(s2, jerk));
+
+            //------------------------------//
+    }
     }
 };
 
@@ -625,11 +534,11 @@ void createDesmosGraph(TankConfig config, std::string fileName = "graph.html", s
     {
         file.open(htmlFileLocation);
     }
-    file << "<!DOCTYPE html><html><head></head><style>html, body{margin: 0px; width: 100%; height: 100%}</style><body>";
+    file << "<!DOCTYPE html><html><head></head><style>html, body{margin: 0px; width: 100%; height: 100%;}</style><body>";
     file << u8R"(<script src="https://www.desmos.com/api/v1.5/calculator.js?apiKey=dcb31709b452b1cf9dc26972add0fda6"></script>)"s;
 
 
-    file << u8R"(<div id="calculator" style="width: 100%; height: 100%;"></div>)"s;
+    file << u8R"(<div id="calculator" style="width: calc(100% - 2px); height: calc(100% - 2px);"></div>)"s;
 
     file << "<script>\n";
     file << u8R"(var elt = document.getElementById('calculator');)"s << "\n" << "var calculator = Desmos.GraphingCalculator(elt);";
@@ -642,8 +551,8 @@ void createDesmosGraph(TankConfig config, std::string fileName = "graph.html", s
         file << u8R"(calculator.setExpression({id: 'leftGraph)"s;
         file << i;
         file << u8R"(', color: Desmos.Colors.RED, latex: 'y=)"s;
-        file << fixed << setprecision(precision) << s.A << "x^3 + " << setprecision(precision) << fixed << s.B << "x^2 + " << setprecision(precision) << fixed << s.C << "x + " << setprecision(precision) << fixed << s.D;
-        file << "  \\\\left\\\\{" << setprecision(6) << min(s.spline.point1.X, s.spline.point2.X) << "\\\\le x \\\\le" << setprecision(6) << max(s.spline.point1.X, s.spline.point2.X) << "\\\\right\\\\}";
+        file << fixed << setprecision(precision) << s.A << "(x - " << s.spline.function.translateX << ")^3 + " << setprecision(precision) << fixed << s.B << "(x -" << s.spline.function.translateX << ")^2 + " << setprecision(precision) << fixed << s.C << "(x -" << s.spline.function.translateX << ") + " << setprecision(precision) << fixed << (s.D + s.spline.function.translateY);
+        file << "  \\\\left\\\\{" << setprecision(6) << min(s.spline.realPoint1().X, s.spline.realPoint2().X) << "\\\\le x \\\\le" << setprecision(6) << max(s.spline.realPoint2().X, s.spline.realPoint2().X) << "\\\\right\\\\}";
         file << u8R"('});)"s;
     }
 
@@ -653,8 +562,8 @@ void createDesmosGraph(TankConfig config, std::string fileName = "graph.html", s
         file << u8R"(calculator.setExpression({id: 'rightGraph)"s;
         file << i;
         file << u8R"(', color: Desmos.Colors.BLUE, latex: 'y=)"s;
-        file << setprecision(precision) << fixed << s.A << "x^3 + " << setprecision(precision) << fixed << s.B << "x^2 + " << setprecision(precision) << fixed << s.C << "x + " << setprecision(precision) << fixed << s.D;
-        file << "  \\\\left\\\\{" << setprecision(6) << min(s.spline.point1.X, s.spline.point2.X) << "\\\\le x \\\\le" << setprecision(6) << max(s.spline.point1.X, s.spline.point2.X) << "\\\\right\\\\}";
+        file << fixed << setprecision(precision) << s.A << "(x - " << s.spline.function.translateX << ")^3 + " << setprecision(precision) << fixed << s.B << "(x -" << s.spline.function.translateX << ")^2 + " << setprecision(precision) << fixed << s.C << "(x -" << s.spline.function.translateX << ") + " << setprecision(precision) << fixed << (s.D + s.spline.function.translateY);
+        file << "  \\\\left\\\\{" << setprecision(6) << min(s.spline.realPoint1().X, s.spline.realPoint2().X) << "\\\\le x \\\\le" << setprecision(6) << max(s.spline.realPoint2().X, s.spline.realPoint2().X) << "\\\\right\\\\}";
         file << u8R"('});)"s;
     }
 
@@ -690,7 +599,7 @@ void createDesmosGraph(Curve curve, std::string fileName = "graph.html", std::st
     file << u8R"(<script src="https://www.desmos.com/api/v1.5/calculator.js?apiKey=dcb31709b452b1cf9dc26972add0fda6"></script>)"s;
 
 
-    file << u8R"(<div id="calculator" style="width: 100%; height: 100%;"></div>)"s;
+    file << u8R"(<div id="calculator" style="width: calc(100% - 2px); height: calc(100% - 2px);"></div>)"s;
 
     file << "<script>\n";
     file << u8R"(var elt = document.getElementById('calculator');)"s << "\n" << "var calculator = Desmos.GraphingCalculator(elt);";
@@ -701,8 +610,14 @@ void createDesmosGraph(Curve curve, std::string fileName = "graph.html", std::st
     {
         file << u8R"(calculator.setExpression({id: 'test)"s << i << "'";
         file << u8R"(, color: Desmos.Colors.BLACK, latex: 'y=)"s;
-        file << setprecision(precision) << fixed << curve[i].function.A << "x^3 + " << setprecision(precision) << fixed << curve[i].function.B << "x^2 + " << setprecision(precision) << fixed << curve[i].function.C << "x + " << setprecision(precision) << fixed << curve[i].function.D;
-        file << "  \\\\left\\\\{" << setprecision(6) << min(curve[i].point1.X, curve[i].point2.X) << "\\\\le  x \\\\le" << setprecision(6) << max(curve[i].point1.X, curve[i].point2.X) << "\\\\right\\\\} ";
+
+        file << setprecision(precision) << fixed << curve[i].function.A << "x^3 + " << setprecision(precision) << fixed 
+        << curve[i].function.B << "x^2 + " << setprecision(precision) << fixed 
+        << curve[i].function.C << "x + " << setprecision(precision) << fixed << curve[i].function.D;
+
+        file << "  \\\\left\\\\{" << setprecision(6) << min(curve[i].point1.X, curve[i].point2.X) 
+        << "\\\\le  x \\\\le" << setprecision(6) << max(curve[i].point1.X, curve[i].point2.X) << "\\\\right\\\\} ";
+
         file << u8R"('});)"s;
     }
     file << "</script>";
