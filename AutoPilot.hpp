@@ -376,14 +376,32 @@ class TankConfig
     Trajectory leftTrajectory;
     Trajectory rightTrajectory;
 
+    double currentTime = 0.0;
+
     friend void createDesmosGraph(TankConfig config, std::string fileName, std::string htmlFileLocation);
 
     public:
-    template<typename SpeedControllerGroup, typename Encoder>
-    void run(SpeedControllerGroup leftSide, SpeedControllerGroup rightSide, double jerk, double Kp)
+    template<typename SpeedControllerGroup, typename Encoder, typename PIDController>
+    void run(SpeedControllerGroup &leftSide, SpeedControllerGroup &rightSide, Encoder &leftEncoder, Encoder &rightEncoder, PIDController &leftPID, PIDController &rightPID, double jerk, double Kp, double Ki, double Kd)
     {
-        //u = Κₚe
+        //u = Κp*e + Kd*de/dt + Ki * Integral(e(t), 0, t ) dt
 
+        size_t li = 0;
+        auto tl = 0.0;
+        for (li; li < leftTrajectory.size() || tl > currentTime; li++)
+        {
+            tl += leftTrajectory[li].time;
+        }
+
+        size_t ri = 0;
+        auto rl = 0.0;
+        for (ri; li < rightTrajectory.size() || rl > currentTime; ri++)
+        {
+            rl += rightTrajectory[ri].time;
+        }
+        leftSide.set(leftPID.calculate(leftEncoder.getVelocity(), leftTrajectory[li].Velocity(currentTime - leftTrajectory[li].time)));
+        rightSide.set(rightPID.calculate(rightEncoder.getVelocity(), rightTrajectory[ri].Velocity(currentTime - rightTrajectory[ri].time)));
+        currentTime += leftPID.GetPeriod();
     }
 
     void testTrajectory()
