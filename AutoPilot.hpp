@@ -6,6 +6,7 @@
 #include <string>
 #include <fstream>
 #include <iomanip>
+#include <functional>
 
 const auto PI = 3.141592653589793238462643383279502884L;
 const auto DEGREES2RADIANS = (PI / 180);
@@ -379,11 +380,37 @@ class TankConfig
     friend void createDesmosGraph(TankConfig config, std::string fileName, std::string htmlFileLocation);
 
     public:
-    template<typename SpeedControllerGroup, typename Encoder>
-    void run(SpeedControllerGroup leftSide, SpeedControllerGroup rightSide, double jerk, double Kp)
-    {
-        //u = Κₚe
 
+    enum GlobalType
+    {
+        VELOCITY, ACCELERATION, JERK
+    };
+
+    void run(double (*RPMFn)())
+    {
+        std::cout << RPMFn() << "\n";
+    }
+
+    template<typename Fn, typename Src>
+    void run(Fn &&RPMFn, Src &&src)
+    {
+        auto f = std::bind(RPMFn, src);
+        std::cout << f() << "\n";
+    }
+
+    //this assumes PIDCalcFN takes in order of current, target; assumes SetFn is within the src object
+    template<typename Fn, typename Src, typename PIDFn, typename PIDSrc, typename SetFN>
+    void run(Fn &&RPMFn, Src &&src, PIDFn &&PIDCalcFn, PIDSrc &&PIDController, SetFN &&setFn)
+    {
+        auto target = 300;
+        auto getRPM = std::bind(RPMFn, src);
+        auto calc = std::bind(PIDCalcFn, PIDController, std::placeholders::_1, target);
+        auto set = std::bind(setFn, src, std::placeholders::_1);
+        auto s = getRPM();
+        auto e = calc(s);
+        std::cout << "Speed is: " << s << "\n";
+        std::cout << "New voltage is: " << e << "\n";
+        set(e);
     }
 
     void testTrajectory()
@@ -502,6 +529,52 @@ class TankConfig
 
             //------------------------------//
     }
+    }
+
+    double globalAt(double time, GlobalType type, bool left)
+    {
+        double t = 0;
+        size_t i = 0;
+        if (left)
+        {
+            while(t > time)
+            {
+                time += leftTrajectory[i].time;
+                i++;
+            }
+            switch (type)
+            {
+            case GlobalType::VELOCITY:
+                return leftTrajectory[i].Velocity(t - time);
+                break;
+            case GlobalType::ACCELERATION:
+                return leftTrajectory[i].Acceleration(t - time);
+                break;
+            case GlobalType::JERK:
+                return leftTrajectory[i].Jerk(t - time);
+                break;
+            }
+        }
+        else
+        {
+            while(t > time)
+            {
+                time += rightTrajectory[i].time;
+                i++;
+            }
+            switch (type)
+            {
+            case GlobalType::VELOCITY:
+                return rightTrajectory[i].Velocity(t - time);
+                break;
+            case GlobalType::ACCELERATION:
+                return rightTrajectory[i].Acceleration(t - time);
+                break;
+            case GlobalType::JERK:
+                return rightTrajectory[i].Jerk(t - time);
+                break;
+            }
+        }
     }
 };
 
@@ -624,3 +697,56 @@ void createDesmosGraph(Curve curve, std::string fileName = "graph.html", std::st
 
     file.close();
 }
+
+template<typename SpeedController>
+class TankDrive
+{
+    TankConfig *config;
+    double time;
+    SpeedController &masterLeft, &masterRight;
+    std::function<double(double, double)> calc; 
+    std::function <double()> getLeft; 
+    std::function<double()> getRight; 
+    std::function<void(double)> setLeft;
+    std::function<void(double)> setRight;
+
+    public:
+    TankDrive(SpeedController &leftMaster, SpeedController &rightMaster, TankConfig *con) : masterLeft(leftMaster), masterRight(rightMaster), config(con), time(0)
+    {}
+
+    void setTime(double t)
+    {
+        time = t;
+    }
+
+    //assumes actual value, target
+    template<typename PIDFn, typename Src>
+    void setUpPID(PIDFn &&fn, Src &&src)
+    {
+        calc = std::bind(fn, src, std::placeholders::_1, std::placeholders::_2);
+    }
+
+    template<typename getFn, typename Src>
+    void setUpGet(getFn &&fn, Src &&leftSrc, Src &&rightSrc)
+    {
+        getLeft = std::bind(fn, leftSrc);
+        getRight = std::bind(fn, rightSrc);
+    }
+        
+    template<typename setFn, typename Src>
+    void setUpSet(setFn &&fn, Src &&leftSrc, Src &&rightSrc)
+    {
+        setLeft = std::bind(fn, leftSrc, std::placeholders::_1);
+        setRight = std::bind(fn, rightSrc, std::placeholders::_1);
+    }
+
+    void run()
+    {
+        auto i1 = calc(getLeft(), config->globalAt(time, TankConfig::GlobalType::VELOCITY, true));
+        auto i2 = calc(getRight(), config->globalAt(time, TankConfig::GlobalType::VELOCITY, true));
+        std::cout << "Set Voltage are: " << i1 << " " << i2 << "\n";
+        setLeft(i1);
+        setRight(i2);
+        time += 0.02;
+    }
+};
