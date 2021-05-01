@@ -382,7 +382,6 @@ class TankConfig
     friend void createDesmosGraph(TankConfig config, std::string fileName, std::string htmlFileLocation);
 
     public:
-<<<<<<< HEAD
 
     enum GlobalType
     {
@@ -414,29 +413,6 @@ class TankConfig
         std::cout << "Speed is: " << s << "\n";
         std::cout << "New voltage is: " << e << "\n";
         set(e);
-=======
-    template<typename SpeedControllerGroup, typename Encoder, typename PIDController>
-    void run(SpeedControllerGroup &leftSide, SpeedControllerGroup &rightSide, Encoder &leftEncoder, Encoder &rightEncoder, PIDController &leftPID, PIDController &rightPID, double jerk, double Kp, double Ki, double Kd)
-    {
-        //u = Κp*e + Kd*de/dt + Ki * Integral(e(t), 0, t ) dt
-
-        size_t li = 0;
-        auto tl = 0.0;
-        for (li; li < leftTrajectory.size() || tl > currentTime; li++)
-        {
-            tl += leftTrajectory[li].time;
-        }
-
-        size_t ri = 0;
-        auto rl = 0.0;
-        for (ri; li < rightTrajectory.size() || rl > currentTime; ri++)
-        {
-            rl += rightTrajectory[ri].time;
-        }
-        leftSide.set(leftPID.calculate(leftEncoder.getVelocity(), leftTrajectory[li].Velocity(currentTime - leftTrajectory[li].time)));
-        rightSide.set(rightPID.calculate(rightEncoder.getVelocity(), rightTrajectory[ri].Velocity(currentTime - rightTrajectory[ri].time)));
-        currentTime += leftPID.GetPeriod();
->>>>>>> 4f3a4af13b74e79fcf256704d61cb0e89e94a5d4
     }
 
     void testTrajectory()
