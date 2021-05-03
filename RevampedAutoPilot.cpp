@@ -2,7 +2,7 @@
 
 using namespace std;
 
-const string desktop = "C:\\Users\\Lance\\Documents\\AutoPilot-Library\\";
+const string desktop = "D:\\Documents\\AutoPilot-Library\\";
 const string laptop = "C:\\Users\\Lance\\Documents\\AutoPilot-Library\\";
 
 
@@ -46,7 +46,7 @@ double testRPM()
 int main() {
     cout << "Tesing AP\n";
     cout.precision(10);
-    Path path = {Waypoint(0, 0, 0), Waypoint(1, 2, 0), Waypoint(3, 4, 0), Waypoint(5, 0, 0)};
+    Path path = {Waypoint(-1, 0, 0), Waypoint(1, 2, 0), Waypoint(3, 4, 0), Waypoint(5, 0, 0)};
     auto curve = curveGenerator(path);
     TankConfig drive(curve, 2, 1);
     testSC test;

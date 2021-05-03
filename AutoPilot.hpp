@@ -12,6 +12,16 @@ const auto PI = 3.141592653589793238462643383279502884L;
 const auto DEGREES2RADIANS = (PI / 180);
 const auto RADIANS2DEGREES = (180 / PI);
 
+double _DEGREES2RADIANS(long double a)
+{
+    return a * DEGREES2RADIANS;
+}
+
+double _RADIANS2DEGREES(long double r)
+{
+    return r * RADIANS2DEGREES;
+}
+
 void hermite_cubic_to_power_cubic(double x1, double f1, double d1, double x2,
     double f2, double d2, double* c0, double* c1, double* c2, double* c3)
 
@@ -91,6 +101,11 @@ double truncate(double input, size_t accuracy)
         c = a.substr(0, accuracy + 2);
     }
     return stod(c);
+}
+
+double deriv2angle(double d)
+{
+    return _RADIANS2DEGREES(atan(d));
 }
 
 struct Waypoint
@@ -369,6 +384,17 @@ Segment GenerateSegment(Spline Function, double Jerk)
 bool USING_DISTANCE_PARTION = true;
 size_t TANK_CONFIG_PARTION_VALUE = .25;
 
+Curve curveGenerator(Path path) {
+    Curve ReturnSpline;
+    size_t NumberOfFunctions = path.size() - 1;
+    for (int i = 0; i < NumberOfFunctions; i++)
+    {
+        auto Temp = HermiteFinder(path[i], path[i + 1]);
+        ReturnSpline.push_back(Temp);
+    }
+    return ReturnSpline;
+}
+
 typedef std::vector<Segment> Trajectory;
 class TankConfig
 {
@@ -428,109 +454,91 @@ class TankConfig
         }
     }
 
+    static constexpr size_t parts = 8;
+    //this is just wrong, need to just get points away from function and make that left and right
     TankConfig(Curve curve, double widthBetweenWheels, double jerk)
     {
         TankConfig::curve = curve;
         leftTrajectory = Trajectory();
         rightTrajectory = Trajectory();
-        double centerToWheels = widthBetweenWheels / 2;
+        double radius = widthBetweenWheels / 2;
+
+        Path leftPath = Path(), rightPath = Path();
+
+        std::cout << "Test 1: " << "\n";
+        for (auto i : rightPath)
+        {
+            std::cout << i.X << " " << i.Y << " " << i.Angle << "\n";
+        }
+        std::cout << "Test 2: " << "\n";
+
+        //doesn't work for some reason
         for (Spline s : curve)
         {
-            auto x1 = s.point1.X;
-            auto y1 = s.point1.Y;
-            auto x2 = s.point2.X;
-            auto y2 = s.point2.Y;
-
-            auto slope1 = truncate((3 * s.function.A * x1 * x1) + (2 * s.function.B * x1) + (s.function.C), 10);
-            auto normal1 = -1 / slope1;
-            auto slope2 = truncate((3 * s.function.A * x2 * x2) + (2 * s.function.B * x2) + (s.function.C), 10);
-            auto normal2 = -1 / slope2;
-
-            auto pointSlopeForm = [](double x1, double y1, double m)
+            auto x1 = s.point1.X, x2 = s.point2.X;
+            auto d = x2 - x1;
+            auto func = s.function;
+            for (size_t i = 0 ; i < parts; i++)
             {
-                return [x1, y1, m](double x) -> double {
-                    return (m * (x - x1) + y1);
-                };
-            };
-
-            auto normalLine1 = pointSlopeForm(x1, y1, normal1);
-            auto normalLine2 = pointSlopeForm(x2, y2, normal2);
-
-
-            double nx1, nx2, nx3, nx4, ny1, ny2, ny3, ny4;
-
-            if (normal1 == NAN || normal1 == -INFINITY || normal1 == -NAN || normal1 == INFINITY)
-            {
-                nx1 = x1;
-                nx3 = x1;
-                if (sin(s.point1.Angle * DEGREES2RADIANS) > 0)
+                auto x3 = (d / parts * i) + x1;
+                double nx1, nx2, ny1, ny2;
+                if (func.derivAt(x3) == 0)
                 {
-                    ny1 = y1 + centerToWheels;
-                    ny3 = y1 - centerToWheels;
+                    auto y = s.function.valueAt(x3);
+                    nx1 = x3; 
+                    nx2 = x3; 
+                    ny1 = y + radius; 
+                    ny2 = y - radius;
                 }
                 else
                 {
-                    ny1 = y1 - centerToWheels;
-                    ny3 = y1 + centerToWheels;
-                }
-            }
-            else {
-                if (sin(s.point1.Angle * DEGREES2RADIANS) > 0)
-                {
-                    nx1 = x1 + (centerToWheels / sqrt(1 + (normal1 * normal1)));
-                    nx3 = x1 - (centerToWheels / sqrt(1 + (normal1 * normal1)));
-                }
-                else
-                {
-                    nx1 = x1 - (centerToWheels / sqrt(1 + (normal1 * normal1)));
-                    nx3 = x1 + (centerToWheels / sqrt(1 + (normal1 * normal1)));
-                }
-                ny1 = normalLine1(nx1);
-                ny3 = normalLine1(nx3);
-            }
-            if (normal2 == NAN || normal2 == -INFINITY || normal2 == -NAN || normal2 == INFINITY)
-            {
-                nx2 = x2;
-                nx4 = x2;
-                if (sin(s.point2.Angle * DEGREES2RADIANS) > 0)
-                {
-                    ny2 = y2 + centerToWheels;
-                    ny4 = y2 - centerToWheels;
-                }
-                else
-                {
-                    ny2 = y2 - centerToWheels;
-                    ny4 = y2 + centerToWheels;
-                }
-            }
-            else
-            {
-                if (sin(s.point2.Angle * DEGREES2RADIANS) > 0)
-                {
-                    nx2 = x2 + (centerToWheels / sqrt(1 + (normal2 * normal2)));
-                    nx4 = x2 - (centerToWheels / sqrt(1 + (normal2 * normal2)));
-                }
-                else
-                {
-                    nx2 = x2 - (centerToWheels / sqrt(1 + (normal2 * normal2)));
-                    nx4 = x2 + (centerToWheels / sqrt(1 + (normal2 * normal2)));
-                }
-                ny2 = normalLine2(nx2);
-                ny4 = normalLine2(nx4);
-            }
+                    auto normal = -1 / func.derivAt(x3);
 
-            
-            Waypoint np1 = Waypoint(nx1, ny1, s.point1.Angle), np2 = Waypoint(nx2, ny2, s.point2.Angle),
-            np3 = Waypoint(nx3, ny3, s.point1.Angle), np4 = Waypoint(nx4, ny4, s.point2.Angle);
+                    nx1 = x3 - (radius/(sqrt(1+(normal*normal))));
+                    nx2 = x3 + (radius/(sqrt(1+(normal*normal))));
+                    ny1 = normal * (nx1 - x3) + func.valueAt(x3);
+                    ny2 = normal * (nx2 - x3) + func.valueAt(x3);
+                }
 
-            auto s1 = Spline(np1, np2);
-            auto s2 = Spline(np3, np4);
+                auto a = deriv2angle(func.derivAt(x3));
 
-            leftTrajectory.push_back(Segment(s1, jerk));
-            rightTrajectory.push_back(Segment(s2, jerk));
+                leftPath.push_back(Waypoint(nx1, ny1, a));
+                rightPath.push_back(Waypoint(nx2, ny2, a));
+                // std::cout << "Got here!" << "\n";
+                // std::cout << "Pushed back: " << leftPath[leftPath.size() - 1].X << " " << leftPath[leftPath.size() - 1].Y << "\n";
+            }
+        }
 
-            //------------------------------//
-    }
+        //push back very last points
+        // auto s = curve[curve.size() - 1];
+        // auto x2 = s.point2.X;
+        // auto func = s.function;
+
+        // auto normal = -1 / func.valueAt(x2);
+
+        // auto nx1 = x2 + (radius/(sqrt(1+(normal*normal))));
+        // auto nx2 = x2 - (radius/(sqrt(1+(normal*normal))));
+        // auto ny1 = normal * (nx1 - x2) + func.valueAt(x2);
+        // auto ny2 = normal * (nx2 - x2) + func.valueAt(x2);
+
+        // auto a = deriv2angle(func.derivAt(x2));
+
+        // leftPath.push_back(Waypoint(nx1, ny1, a));
+        // rightPath.push_back(Waypoint(nx2, ny2, a));
+
+        for (auto i : leftPath)
+        {
+            std::cout << i.X << " " << i.Y << " " << i.Angle << "\n";
+        }
+
+        auto leftCurve = curveGenerator(leftPath);        
+        auto rightCurve = curveGenerator(rightPath);        
+
+        for (size_t i = 0; i < leftCurve.size(); i++)
+        {
+            leftTrajectory.push_back(GenerateSegment(leftCurve[i], jerk));
+            rightTrajectory.push_back(GenerateSegment(rightCurve[i], jerk));
+        }
     }
 
     double globalAt(double time, GlobalType type, bool left)
@@ -548,13 +556,10 @@ class TankConfig
             {
             case GlobalType::VELOCITY:
                 return leftTrajectory[i].Velocity(t - time);
-                break;
             case GlobalType::ACCELERATION:
                 return leftTrajectory[i].Acceleration(t - time);
-                break;
             case GlobalType::JERK:
                 return leftTrajectory[i].Jerk(t - time);
-                break;
             }
         }
         else
@@ -568,30 +573,14 @@ class TankConfig
             {
             case GlobalType::VELOCITY:
                 return rightTrajectory[i].Velocity(t - time);
-                break;
             case GlobalType::ACCELERATION:
                 return rightTrajectory[i].Acceleration(t - time);
-                break;
             case GlobalType::JERK:
                 return rightTrajectory[i].Jerk(t - time);
-                break;
             }
         }
     }
 };
-
-typedef std::vector<Waypoint> Path;
-
-Curve curveGenerator(Path path) {
-    Curve ReturnSpline;
-    size_t NumberOfFunctions = path.size() - 1;
-    for (int i = 0; i < NumberOfFunctions; i++)
-    {
-        auto Temp = HermiteFinder(path[i], path[i + 1]);
-        ReturnSpline.push_back(Temp);
-    }
-    return ReturnSpline;
-}
 
 //creates html file that displays desmos graph, relative location files only work if your workspace location is correct
 //htmlFileLocation overrides the file name
