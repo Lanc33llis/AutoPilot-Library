@@ -12,6 +12,104 @@ const auto PI = 3.141592653589793238462643383279502884L;
 const auto DEGREES2RADIANS = (PI / 180);
 const auto RADIANS2DEGREES = (180 / PI);
 
+class Mat
+{
+    size_t rows, cols;
+    std::vector<std::vector<double>> arr;
+public:
+    Mat(size_t rows, size_t cols) : rows(rows), cols(cols)
+    {
+        arr = std::vector<std::vector<double>>(rows, std::vector<double>(cols, 0));
+    }
+    Mat Mult(Mat b)
+    {
+        //this did b * a for some reason. So quick switch
+        Mat tempA = b;
+        Mat tempB = Mat(*this);
+
+        if (tempA.cols != tempB.rows)
+        {
+            throw std::exception("Invalid Matrix Deminsions");
+        }
+
+        Mat n = Mat(tempA.rows, tempB.cols);
+
+        for (size_t i = 0; i < tempA.rows; i++)
+        {
+            for (size_t j = 0; j < tempB.cols; j++)
+            {
+                for (size_t k = 0; k < tempA.cols; k++)
+                {
+                    n[i][j] += tempA[i][k] * tempB[k][j];
+                }
+            }
+        }
+
+        return n;
+    }
+    std::vector<double>& operator [](const size_t i)
+    {
+        return arr[i];
+    }
+
+    void print()
+    {
+        for (size_t i = 0; i < cols; i++)
+        {
+            for (size_t k = 0; k < rows; k++)
+            {
+                std::cout << arr[k][i] << " ";
+            }
+            std::cout << "\n";
+        }
+    }
+
+    static Mat InverseBeizerBasis()
+    {
+        Mat t(4, 4);
+        t[0][0] = 1;
+        t[0][1] = 1;
+        t[0][2] = 1;
+        t[0][3] = 1;
+
+        t[1][1] = 1/3;
+        t[1][2] = 2/3;
+        t[1][3] = 1;
+
+        t[2][2] = 1/3;
+        t[2][3] = 1;
+
+        t[3][3] = 1;
+
+        return t;
+    }
+
+    static Mat HermiteBasis()
+    {
+        Mat t(4, 4);
+        t[0][0] = 2;
+        t[0][1] = -3;
+        t[0][3] = 1;
+
+        t[1][0] = -2;
+        t[1][1] = 3;
+
+        t[2][1] = 1;
+        t[2][2] = -2;
+        t[2][3] = 1;
+
+        t[3][1] = 1;
+        t[3][2] = -1;
+
+        return t;
+    }
+};
+
+Mat operator * (Mat a, Mat b)
+{
+    return a.Mult(b);
+}
+
 double _DEGREES2RADIANS(long double a)
 {
     return a * DEGREES2RADIANS;
@@ -88,16 +186,18 @@ void hermite_cubic_to_power_cubic(double x1, double f1, double d1, double x2,
 double truncate(double input, size_t accuracy)
 {
     bool isNeg = false;
-    if (input < 0) 
+    if (input < 0)
     {
         isNeg = true;
     }
     std::string a = std::to_string(input);
     std::string c = std::string();
-    if (isNeg) {
+    if (isNeg)
+    {
         c = a.substr(0, accuracy + 3);
     }
-    else {
+    else
+    {
         c = a.substr(0, accuracy + 2);
     }
     return stod(c);
@@ -115,7 +215,7 @@ struct Waypoint
     Waypoint() : Waypoint(0, 0, 0) {}
 };
 
-inline bool operator == (const Waypoint& lhs, const Waypoint& rhs)
+inline bool operator==(const Waypoint& lhs, const Waypoint& rhs)
 {
     if (lhs.X == rhs.X && lhs.Y == rhs.Y && lhs.Angle == rhs.Angle)
     {
@@ -139,7 +239,7 @@ struct StandardCubicFunction
     }
     double derivAt(const double x) const
     {
-        return (3*A*std::pow(x - translateX, 2)) + (2*B*(x - translateX)) + (C);
+        return (3 * A * std::pow(x - translateX, 2)) + (2 * B * (x - translateX)) + (C);
     }
     StandardCubicFunction(double a, double b, double c, double d, double tx = 0, double ty = 0) : A(a), B(b), C(c), D(d), translateX(tx), translateY(ty) {}
     StandardCubicFunction() : StandardCubicFunction(0, 0, 0, 0) {}
@@ -152,19 +252,19 @@ struct Spline
     Waypoint point1, point2;
     StandardCubicFunction function;
     //accounts for tx & ty
-    Waypoint realPoint1() 
+    Waypoint realPoint1()
     {
         return Waypoint(point1.X - function.translateX, point1.Y + function.translateY, point1.Angle);
     }
 
-    Waypoint realPoint2() 
+    Waypoint realPoint2()
     {
         return Waypoint(point2.X - function.translateX, point2.Y + function.translateY, point2.Angle);
     }
     Spline(Waypoint p1, Waypoint p2, double A, double B, double C, double D, double tx = 0, double ty = 0) : point1(p1), point2(p2), function(StandardCubicFunction(A, B, C, D, tx, ty)) {}
     Spline(Waypoint p1, Waypoint p2, StandardCubicFunction func) : point1(p1), point2(p2), function(func) {}
     Spline(Waypoint p1, Waypoint p2) : Spline(HermiteFinder(p1, p2)) {}
-    Spline() : Spline(Waypoint(0, 0, 0), Waypoint(0, 0, 0),  0, 0, 0, 0) {}
+    Spline() : Spline(Waypoint(0, 0, 0), Waypoint(0, 0, 0), 0, 0, 0, 0) {}
 };
 
 typedef std::vector<Spline> Curve;
@@ -195,18 +295,6 @@ Spline HermiteFinder(Waypoint PointOne, Waypoint PointTwo)
     return Spline(PointOne, PointTwo, truncate(*A3, 10), truncate(*A2, 10), truncate(*A1, 10), truncate(*A0, 10));
 }
 
-//Spline HermiteFinder(Waypoint PointOne, Waypoint PointTwo)
-//{
-//    // p(x) = c0 + c1 * x + c2 * x^2 + c3 * x^3
-//    // p(x) = c3 * x^3 + c2 * x^2 + c1 * x + c0
-//    double* A0 = new double(0), * A1 = new double(0), * A2 = new double(0), * A3 = new double(0);
-//    hermite_cubic_to_power_cubic(PointOne.X, PointOne.Y, Angle2Deriv(PointOne.Angle), PointTwo.X, PointTwo.Y, Angle2Deriv(PointTwo.Angle), A0, A1, A2, A3);
-//    return Spline(PointOne, PointTwo, *A3, *A2, *A1, *A0);
-//    delete A0;
-//    delete A1;
-//    delete A2;
-//    delete A3;
-//}
 double distance(Waypoint p1, Waypoint p2)
 {
     return std::sqrt(std::pow(p2.X - p1.X, 2) + std::pow(p2.Y - p1.Y, 2));
@@ -217,15 +305,14 @@ double distance(double x1, double y1, double x2, double y2)
     return distance(Waypoint(x1, y1, 0), Waypoint(x2, y2, 0));
 }
 
-
 //uses arc length formula to find distance
 double ArcLengthDistance(Spline Function, size_t Accuracy = 500)
 {
     double x1 = Function.point1.X;
-    double x2 = Function.point2.X;;
+    double x2 = Function.point2.X;
+    ;
 
-    auto f = [Function](double x) 
-    {
+    auto f = [Function](double x) {
         return Function.function.valueAt(x);
     };
 
@@ -251,8 +338,7 @@ double ArcLengthDistance(Spline theSplineFunction, double lowerLimit, double upp
     auto p2 = Waypoint(upperLimit, theSplineFunction.function.valueAt(upperLimit), std::atan(theSplineFunction.function.derivAt(upperLimit)) * RADIANS2DEGREES);
     auto s = HermiteFinder(p1, p2);
     return ArcLengthDistance(
-        HermiteFinder(p1, p2), Accuracy
-    );
+        HermiteFinder(p1, p2), Accuracy);
 }
 
 //Parametrizes the cubic function to use arc length and returns the x value arcLength away
@@ -372,9 +458,12 @@ Segment GenerateSegment(Spline Function, double Jerk)
     //TIME STARTS AT 0 THAT'S WHY FUNCTION STARTS at 0, 0
     double A, B, C, D, Time;
     Time = TimeGivenSFJ(Function, Jerk);
-    Spline XFunction = HermiteFinder(Waypoint( 0, 0, Function.point1.Angle ), Waypoint( Time, Function.point2.X - Function.point1.X, Function.point2.Angle ));
-    Spline YFunction = HermiteFinder(Waypoint( 0, 0, Function.point1.Angle ), Waypoint( Time, Function.point2.Y - Function.point1.Y, Function.point2.Angle ));
-    A = Function.function.A; B = Function.function.B; C = Function.function.C; D = Function.function.D;
+    Spline XFunction = HermiteFinder(Waypoint(0, 0, Function.point1.Angle), Waypoint(Time, Function.point2.X - Function.point1.X, Function.point2.Angle));
+    Spline YFunction = HermiteFinder(Waypoint(0, 0, Function.point1.Angle), Waypoint(Time, Function.point2.Y - Function.point1.Y, Function.point2.Angle));
+    A = Function.function.A;
+    B = Function.function.B;
+    C = Function.function.C;
+    D = Function.function.D;
     return Segment(Function, XFunction, YFunction, A, B, C, D, Time);
 }
 
@@ -384,7 +473,8 @@ Segment GenerateSegment(Spline Function, double Jerk)
 bool USING_DISTANCE_PARTION = true;
 size_t TANK_CONFIG_PARTION_VALUE = .25;
 
-Curve curveGenerator(Path path) {
+Curve curveGenerator(Path path)
+{
     Curve ReturnSpline;
     size_t NumberOfFunctions = path.size() - 1;
     for (int i = 0; i < NumberOfFunctions; i++)
@@ -396,6 +486,7 @@ Curve curveGenerator(Path path) {
 }
 
 typedef std::vector<Segment> Trajectory;
+
 class TankConfig
 {
     Curve curve;
@@ -407,11 +498,12 @@ class TankConfig
 
     friend void createDesmosGraph(TankConfig config, std::string fileName, std::string htmlFileLocation);
 
-    public:
-
+public:
     enum GlobalType
     {
-        VELOCITY, ACCELERATION, JERK
+        VELOCITY,
+        ACCELERATION,
+        JERK
     };
 
     void run(double (*RPMFn)())
@@ -419,16 +511,16 @@ class TankConfig
         std::cout << RPMFn() << "\n";
     }
 
-    template<typename Fn, typename Src>
-    void run(Fn &&RPMFn, Src &&src)
+    template <typename Fn, typename Src>
+    void run(Fn&& RPMFn, Src&& src)
     {
         auto f = std::bind(RPMFn, src);
         std::cout << f() << "\n";
     }
 
     //this assumes PIDCalcFN takes in order of current, target; assumes SetFn is within the src object
-    template<typename Fn, typename Src, typename PIDFn, typename PIDSrc, typename SetFN>
-    void run(Fn &&RPMFn, Src &&src, PIDFn &&PIDCalcFn, PIDSrc &&PIDController, SetFN &&setFn)
+    template <typename Fn, typename Src, typename PIDFn, typename PIDSrc, typename SetFN>
+    void run(Fn&& RPMFn, Src&& src, PIDFn&& PIDCalcFn, PIDSrc&& PIDController, SetFN&& setFn)
     {
         auto target = 300;
         auto getRPM = std::bind(RPMFn, src);
@@ -454,7 +546,7 @@ class TankConfig
         }
     }
 
-    static constexpr size_t parts = 8;
+    static const int parts = 8;
     //this is just wrong, need to just get points away from function and make that left and right
     TankConfig(Curve curve, double widthBetweenWheels, double jerk)
     {
@@ -463,76 +555,24 @@ class TankConfig
         rightTrajectory = Trajectory();
         double radius = widthBetweenWheels / 2;
 
-        Path leftPath = Path(), rightPath = Path();
+        Path leftPath, rightPath;
 
-        std::cout << "Test 1: " << "\n";
-        for (auto i : rightPath)
+        for (size_t i = 0; i < curve.size(); i++)
         {
-            std::cout << i.X << " " << i.Y << " " << i.Angle << "\n";
-        }
-        std::cout << "Test 2: " << "\n";
+            auto s = curve[i];
+            auto p1 = s.point1, p2 = s.point2;
+            Mat ctrl(1, 4);
+            ctrl[0][0] = p1.X;
+            ctrl[0][1] = Angle2Deriv(p1.Angle);
+            ctrl[0][2] = p2.X;
+            ctrl[0][3] = Angle2Deriv(p2.Angle);
 
-        //doesn't work for some reason
-        for (Spline s : curve)
-        {
-            auto x1 = s.point1.X, x2 = s.point2.X;
-            auto d = x2 - x1;
-            auto func = s.function;
-            for (size_t i = 0 ; i < parts; i++)
-            {
-                auto x3 = (d / parts * i) + x1;
-                double nx1, nx2, ny1, ny2;
-                if (func.derivAt(x3) == 0)
-                {
-                    auto y = s.function.valueAt(x3);
-                    nx1 = x3; 
-                    nx2 = x3; 
-                    ny1 = y + radius; 
-                    ny2 = y - radius;
-                }
-                else
-                {
-                    auto normal = -1 / func.derivAt(x3);
-
-                    nx1 = x3 - (radius/(sqrt(1+(normal*normal))));
-                    nx2 = x3 + (radius/(sqrt(1+(normal*normal))));
-                    ny1 = normal * (nx1 - x3) + func.valueAt(x3);
-                    ny2 = normal * (nx2 - x3) + func.valueAt(x3);
-                }
-
-                auto a = deriv2angle(func.derivAt(x3));
-
-                leftPath.push_back(Waypoint(nx1, ny1, a));
-                rightPath.push_back(Waypoint(nx2, ny2, a));
-                // std::cout << "Got here!" << "\n";
-                // std::cout << "Pushed back: " << leftPath[leftPath.size() - 1].X << " " << leftPath[leftPath.size() - 1].Y << "\n";
-            }
+            Mat converison = Mat::InverseBeizerBasis() * Mat::HermiteBasis();
+            Mat bezier = ctrl.Mult(converison);
         }
 
-        //push back very last points
-        // auto s = curve[curve.size() - 1];
-        // auto x2 = s.point2.X;
-        // auto func = s.function;
-
-        // auto normal = -1 / func.valueAt(x2);
-
-        // auto nx1 = x2 + (radius/(sqrt(1+(normal*normal))));
-        // auto nx2 = x2 - (radius/(sqrt(1+(normal*normal))));
-        // auto ny1 = normal * (nx1 - x2) + func.valueAt(x2);
-        // auto ny2 = normal * (nx2 - x2) + func.valueAt(x2);
-
-        // auto a = deriv2angle(func.derivAt(x2));
-
-        // leftPath.push_back(Waypoint(nx1, ny1, a));
-        // rightPath.push_back(Waypoint(nx2, ny2, a));
-
-        for (auto i : leftPath)
-        {
-            std::cout << i.X << " " << i.Y << " " << i.Angle << "\n";
-        }
-
-        auto leftCurve = curveGenerator(leftPath);        
-        auto rightCurve = curveGenerator(rightPath);        
+        auto leftCurve = curveGenerator(leftPath);
+        auto rightCurve = curveGenerator(rightPath);
 
         for (size_t i = 0; i < leftCurve.size(); i++)
         {
@@ -547,7 +587,7 @@ class TankConfig
         size_t i = 0;
         if (left)
         {
-            while(t > time)
+            while (t > time)
             {
                 time += leftTrajectory[i].time;
                 i++;
@@ -564,7 +604,7 @@ class TankConfig
         }
         else
         {
-            while(t > time)
+            while (t > time)
             {
                 time += rightTrajectory[i].time;
                 i++;
@@ -601,11 +641,11 @@ void createDesmosGraph(TankConfig config, std::string fileName = "graph.html", s
     file << "<!DOCTYPE html><html><head></head><style>html, body{margin: 0px; width: 100%; height: 100%;}</style><body>";
     file << u8R"(<script src="https://www.desmos.com/api/v1.5/calculator.js?apiKey=dcb31709b452b1cf9dc26972add0fda6"></script>)"s;
 
-
     file << u8R"(<div id="calculator" style="width: calc(100% - 2px); height: calc(100% - 2px);"></div>)"s;
 
     file << "<script>\n";
-    file << u8R"(var elt = document.getElementById('calculator');)"s << "\n" << "var calculator = Desmos.GraphingCalculator(elt);";
+    file << u8R"(var elt = document.getElementById('calculator');)"s << "\n"
+        << "var calculator = Desmos.GraphingCalculator(elt);";
 
     size_t precision = 10;
 
@@ -662,11 +702,11 @@ void createDesmosGraph(Curve curve, std::string fileName = "graph.html", std::st
     file << "<!DOCTYPE html><html><head></head><style>html, body{margin: 0px; width: 100%; height: 100%}</style><body>";
     file << u8R"(<script src="https://www.desmos.com/api/v1.5/calculator.js?apiKey=dcb31709b452b1cf9dc26972add0fda6"></script>)"s;
 
-
     file << u8R"(<div id="calculator" style="width: calc(100% - 2px); height: calc(100% - 2px);"></div>)"s;
 
     file << "<script>\n";
-    file << u8R"(var elt = document.getElementById('calculator');)"s << "\n" << "var calculator = Desmos.GraphingCalculator(elt);";
+    file << u8R"(var elt = document.getElementById('calculator');)"s << "\n"
+        << "var calculator = Desmos.GraphingCalculator(elt);";
 
     size_t precision = 10;
 
@@ -675,12 +715,12 @@ void createDesmosGraph(Curve curve, std::string fileName = "graph.html", std::st
         file << u8R"(calculator.setExpression({id: 'test)"s << i << "'";
         file << u8R"(, color: Desmos.Colors.BLACK, latex: 'y=)"s;
 
-        file << setprecision(precision) << fixed << curve[i].function.A << "x^3 + " << setprecision(precision) << fixed 
-        << curve[i].function.B << "x^2 + " << setprecision(precision) << fixed 
-        << curve[i].function.C << "x + " << setprecision(precision) << fixed << curve[i].function.D;
+        file << setprecision(precision) << fixed << curve[i].function.A << "x^3 + " << setprecision(precision) << fixed
+            << curve[i].function.B << "x^2 + " << setprecision(precision) << fixed
+            << curve[i].function.C << "x + " << setprecision(precision) << fixed << curve[i].function.D;
 
-        file << "  \\\\left\\\\{" << setprecision(6) << min(curve[i].point1.X, curve[i].point2.X) 
-        << "\\\\le  x \\\\le" << setprecision(6) << max(curve[i].point1.X, curve[i].point2.X) << "\\\\right\\\\} ";
+        file << "  \\\\left\\\\{" << setprecision(6) << min(curve[i].point1.X, curve[i].point2.X)
+            << "\\\\le  x \\\\le" << setprecision(6) << max(curve[i].point1.X, curve[i].point2.X) << "\\\\right\\\\} ";
 
         file << u8R"('});)"s;
     }
@@ -689,21 +729,22 @@ void createDesmosGraph(Curve curve, std::string fileName = "graph.html", std::st
     file.close();
 }
 
-template<typename SpeedController>
+template <typename SpeedController>
 class TankDrive
 {
-    TankConfig *config;
+    TankConfig* config;
     double time;
-    SpeedController &masterLeft, &masterRight;
-    std::function<double(double, double)> calc; 
-    std::function <double()> getLeft; 
-    std::function<double()> getRight; 
+    SpeedController& masterLeft, & masterRight;
+    std::function<double(double, double)> calc;
+    std::function<double()> getLeft;
+    std::function<double()> getRight;
     std::function<void(double)> setLeft;
     std::function<void(double)> setRight;
 
-    public:
-    TankDrive(SpeedController &leftMaster, SpeedController &rightMaster, TankConfig *con) : masterLeft(leftMaster), masterRight(rightMaster), config(con), time(0)
-    {}
+public:
+    TankDrive(SpeedController& leftMaster, SpeedController& rightMaster, TankConfig* con) : masterLeft(leftMaster), masterRight(rightMaster), config(con), time(0)
+    {
+    }
 
     void setTime(double t)
     {
@@ -711,21 +752,21 @@ class TankDrive
     }
 
     //assumes actual value, target
-    template<typename PIDFn, typename Src>
-    void setUpPID(PIDFn &&fn, Src &&src)
+    template <typename PIDFn, typename Src>
+    void setUpPID(PIDFn&& fn, Src&& src)
     {
         calc = std::bind(fn, src, std::placeholders::_1, std::placeholders::_2);
     }
 
-    template<typename getFn, typename Src>
-    void setUpGet(getFn &&fn, Src &&leftSrc, Src &&rightSrc)
+    template <typename getFn, typename Src>
+    void setUpGet(getFn&& fn, Src&& leftSrc, Src&& rightSrc)
     {
         getLeft = std::bind(fn, leftSrc);
         getRight = std::bind(fn, rightSrc);
     }
-        
-    template<typename setFn, typename Src>
-    void setUpSet(setFn &&fn, Src &&leftSrc, Src &&rightSrc)
+
+    template <typename setFn, typename Src>
+    void setUpSet(setFn&& fn, Src&& leftSrc, Src&& rightSrc)
     {
         setLeft = std::bind(fn, leftSrc, std::placeholders::_1);
         setRight = std::bind(fn, rightSrc, std::placeholders::_1);
