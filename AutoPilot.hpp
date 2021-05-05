@@ -7,6 +7,7 @@
 #include <fstream>
 #include <iomanip>
 #include <functional>
+#include <initializer_list>
 
 const auto PI = 3.141592653589793238462643383279502884L;
 const auto DEGREES2RADIANS = (PI / 180);
@@ -16,49 +17,101 @@ class Mat
 {
     size_t rows, cols;
     std::vector<std::vector<double>> arr;
+    std::vector<std::vector<double>> powerArr;
+    std::vector<std::vector<double>> varArr;
 public:
-    Mat(size_t rows, size_t cols) : rows(rows), cols(cols)
+    Mat(size_t rows, size_t cols, double fill, double pow) : rows(rows), cols(cols)
     {
-        arr = std::vector<std::vector<double>>(rows, std::vector<double>(cols, 0));
+        arr = std::vector<std::vector<double>>(cols, std::vector<double>(rows, fill));
+        powerArr = std::vector<std::vector<double>>(cols, std::vector<double>(rows, pow));
+        varArr = std::vector<std::vector<double>>(cols, std::vector<double>(rows, 0));
+    }
+    Mat(size_t rows, size_t cols, double fill) : Mat(rows, cols, fill, 1) {}
+    Mat(size_t rows, size_t cols) : Mat(rows, cols, 0, 1) {}
+    Mat(std::initializer_list<std::vector<double>> list)
+    {
+        arr = list;
+        rows = arr.size();
+        cols = arr[0].size();
+
+        powerArr = std::vector<std::vector<double>>(cols, std::vector<double>(rows, 1));
+        varArr = std::vector<std::vector<double>>(cols, std::vector<double>(rows, 0));
     }
     Mat Mult(Mat b)
     {
-        //this did b * a for some reason. So quick switch
-        Mat tempA = b;
-        Mat tempB = Mat(*this);
+        Mat A = *this;
+        Mat B = b;
 
-        if (tempA.cols != tempB.rows)
+        if (A.cols == B.rows)
         {
-            throw std::exception("Invalid Matrix Deminsions");
-        }
+            Mat n = Mat(A.rows, B.cols);
 
-        Mat n = Mat(tempA.rows, tempB.cols);
-
-        for (size_t i = 0; i < tempA.rows; i++)
-        {
-            for (size_t j = 0; j < tempB.cols; j++)
+            for (size_t i = 0; i < n.rows; i++)
             {
-                for (size_t k = 0; k < tempA.cols; k++)
+                for (size_t j = 0; j < n.cols; j++)
                 {
-                    n[i][j] += tempA[i][k] * tempB[k][j];
+                    for (size_t k = 0; k < B.rows; k++)
+                    {
+                        n[j][i] += A[k][i] * B[j][k];
+                    }
+                }
+            }
+
+            return n;
+        }
+        else
+        {
+            throw std::logic_error("Invalid Matrix Dimensions");
+        }
+    }
+
+    void setPowers(Mat a)
+    {
+        powerArr = a.arr;
+    }
+
+    void setVariables(Mat a)
+    {
+        varArr = a.arr;
+    }
+
+    Mat input(double t)
+    {
+        Mat b(rows, cols);
+        for (size_t i = 0; i < rows; i++)
+        {
+            for (size_t j = 0; j < cols; j++)
+            {
+                if (varArr[j][i] == 1)
+                {
+                    b[j][i] = std::pow(t, powerArr[j][i]) * arr[j][i];
+                }
+                else
+                {
+                    b[j][i] = arr[j][i];
                 }
             }
         }
-
-        return n;
+        return b;
     }
+
     std::vector<double>& operator [](const size_t i)
     {
         return arr[i];
     }
 
+    operator std::vector < std::vector<double> >()
+    {
+        return arr;
+    }
+
     void print()
     {
-        for (size_t i = 0; i < cols; i++)
+        for (size_t i = 0; i < rows; i++)
         {
-            for (size_t k = 0; k < rows; k++)
+            for (size_t j = 0; j < cols; j++)
             {
-                std::cout << arr[k][i] << " ";
+                std::cout << arr[j][i] << " ";
             }
             std::cout << "\n";
         }
@@ -84,6 +137,12 @@ public:
         return t;
     }
 
+    static Mat BeizerBasis()
+    {
+        Mat t = { {1, -3, 3, -1}, {0, 3, -6, 3}, {0, 0, 3, -3}, {0, 0, 0, 1} };
+        return t;
+    }
+
     static Mat HermiteBasis()
     {
         Mat t(4, 4);
@@ -103,6 +162,7 @@ public:
 
         return t;
     }
+
 };
 
 Mat operator * (Mat a, Mat b)
@@ -561,14 +621,22 @@ public:
         {
             auto s = curve[i];
             auto p1 = s.point1, p2 = s.point2;
-            Mat ctrl(1, 4);
+            Mat ctrl(4, 1);
             ctrl[0][0] = p1.X;
             ctrl[0][1] = Angle2Deriv(p1.Angle);
             ctrl[0][2] = p2.X;
             ctrl[0][3] = Angle2Deriv(p2.Angle);
 
-            Mat converison = Mat::InverseBeizerBasis() * Mat::HermiteBasis();
-            Mat bezier = ctrl.Mult(converison);
+            Mat conversion = Mat::InverseBeizerBasis() * Mat::HermiteBasis();
+            Mat bezierCtrl = conversion * ctrl;
+
+            Mat t(1, 4, 1);
+            t.setPowers({ {1}, {1}, {2}, {3} });
+            t.setVariables({ {0}, {1}, {1}, {1} });
+
+            //actual number below
+            auto result = t.input(.5) * Mat::BeizerBasis() * bezierCtrl;
+
         }
 
         auto leftCurve = curveGenerator(leftPath);

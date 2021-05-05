@@ -44,35 +44,41 @@ double testRPM()
 
 
 int main() {
-    cout << "Tesing AP\n";
-    cout.precision(10);
-    Path path = {Waypoint(-1, 0, 0), Waypoint(1, 2, 0), Waypoint(3, 4, 0), Waypoint(5, 0, 0)};
-    auto curve = curveGenerator(path);
-    TankConfig drive(curve, 2, 1);
-    testSC test;
-    testPIDC pid;
-    testSC m1, m2;
-    TankDrive<testSC> t1(m1, m2, &drive);
-    t1.setUpPID(&testPIDC::calculate, pid);
-    t1.setUpGet(&testSC::getVelocity, m1, m2);
-    t1.setUpSet(&testSC::set, m1, m2);
-    for (size_t i = 0; i < 50; i++)
-    {
-        // std::cout << "Cycle: " << i + 1 << "\n";
-        // drive.run(&testSC::getVelocity, &test, &testPIDC::calculate, pid, &testSC::set);
-        t1.run();
-    }
+    //cout << "Tesing AP\n";
+    //cout.precision(10);
+    Path path = { Waypoint(-1, 0, 0), Waypoint(1, 2, 0), Waypoint(3, 4, 0), Waypoint(5, 0, 0) };
+    //auto curve = curveGenerator(path);
+    //TankConfig drive(curve, 2, 1);
+    //testSC test;
+    //testPIDC pid;
+    //testSC m1, m2;
+    //TankDrive<testSC> t1(m1, m2, &drive);
+    //t1.setUpPID(&testPIDC::calculate, pid);
+    //t1.setUpGet(&testSC::getVelocity, m1, m2);
+    //t1.setUpSet(&testSC::set, m1, m2);
+    //for (size_t i = 0; i < 50; i++)
+    //{
+    //    // std::cout << "Cycle: " << i + 1 << "\n";
+    //    // drive.run(&testSC::getVelocity, &test, &testPIDC::calculate, pid, &testSC::set);
+    //    t1.run();
+    //}
 
-    // drive.testTrajectory();
-    createDesmosGraph(drive, "", desktop + "graph.html");
-    // Spline XSpline = HermiteFinder(Waypoint( 0, path[0].X, 45), Waypoint( path[1].X - path[0].X, path[1].X, 45));
-    // Spline YSpline = HermiteFinder(Waypoint( , path[0].Y, path[0].Angle ), Waypoint( path[1].X - path[0].X, path[1].Y, path[1].Angle ));
-    // createDesmosGraph(Curve{XSpline}, "", desktop + "graph1.html");
-    // createDesmosGraph(Curve{YSpline}, "", desktop + "graph2.html");
-    // cout << "ArcLengthTest: " << ArcLengthDistance(curve[0], 1, -1) << "\n";
-    // cout << "ArcLengthToXValue Test: " << ArcLengthToXValue(curve[0], 1, -.25) << "\n";
-    // cout << "Distance test: " << distance(0, 0, 2, 3    ) << "\n";
+    //// drive.testTrajectory();
+    //createDesmosGraph(drive, "", desktop + "graph.html");
+
+    //return 0;
+
+    auto p1 = path[0], p2 = path[1];
+    Mat ctrl(1, 4);
+    ctrl[0][0] = p1.X;
+    ctrl[0][1] = Angle2Deriv(p1.Angle);
+    ctrl[0][2] = p2.X;
+    ctrl[0][3] = Angle2Deriv(p2.Angle);
+
+    Mat conversion = Mat::InverseBeizerBasis() * Mat::HermiteBasis();
+    Mat bezier = conversion * ctrl;
+    bezier.print();
     return 0;
-}
+}    
 
 //maybe do a bit of automation for increased smoothness. get linear slope between two slopes and like use that instead of user input if not given
