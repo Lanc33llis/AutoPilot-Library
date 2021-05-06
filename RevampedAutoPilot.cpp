@@ -2,7 +2,7 @@
 
 using namespace std;
 
-const string desktop = "D:\\Documents\\AutoPilot-Library\\";
+const string desktop = "D:\\Documents\\VSAutoPilot\\AutoPilot\\AutoPilot\\";
 const string laptop = "C:\\Users\\Lance\\Documents\\AutoPilot-Library\\";
 
 
@@ -13,8 +13,8 @@ struct testSC
     testSC() : rpm(.0), voltage(.0) {};
     double getVelocity()
     {
-        rpm += (voltage*2);
-        return rpm*4;
+        rpm += (voltage * 2);
+        return rpm * 4;
     }
     void set(double i)
     {
@@ -39,7 +39,7 @@ double testRPM()
 {
     static double i = 0;
     i++;
-    return i*4;
+    return i * 4;
 }
 
 
@@ -69,16 +69,18 @@ int main() {
     //return 0;
 
     auto p1 = path[0], p2 = path[1];
-    Mat ctrl(1, 4);
-    ctrl[0][0] = p1.X;
-    ctrl[0][1] = Angle2Deriv(p1.Angle);
-    ctrl[0][2] = p2.X;
-    ctrl[0][3] = Angle2Deriv(p2.Angle);
-
+    Mat ctrl = { {p1.X, Angle2Deriv(p1.Angle), p2.X, Angle2Deriv(p2.Angle)} };
     Mat conversion = Mat::InverseBeizerBasis() * Mat::HermiteBasis();
-    Mat bezier = conversion * ctrl;
-    bezier.print();
+    Mat bezierCtrl = conversion * ctrl;
+    Mat t(1, 4, 1);
+    t.setPowers({ {1}, {1}, {2}, {3} });
+    t.setVariables({ {0}, {1}, {1}, {1} });
+    auto i = t.input(1);
+
+    auto result = i * Mat::BeizerBasis() * bezierCtrl;
+    result.print();
+    //bezierCtrl.print();
     return 0;
-}    
+}
 
 //maybe do a bit of automation for increased smoothness. get linear slope between two slopes and like use that instead of user input if not given
