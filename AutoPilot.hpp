@@ -6,6 +6,7 @@
 #include <string>
 #include <fstream>
 #include <iomanip>
+#include <algorithm>
 #include <functional>
 #include <initializer_list>
 
@@ -61,7 +62,9 @@ public:
         }
         else
         {
-            throw std::logic_error("Invalid Matrix Dimensions");
+            std::string s = std::string("Invalid Matrix Dimensions, A has ") + std::to_string(A.cols) + std::string(" cols ") + std::string("but B has ") + std::to_string(B.rows) + std::string(" rows");
+            std::cerr << s << "\n";
+            throw std::logic_error(s);
         }
     }
 
@@ -119,20 +122,22 @@ public:
 
     static Mat InverseBeizerBasis()
     {
-        Mat t(4, 4);
-        t[0][0] = 1;
-        t[0][1] = 1;
-        t[0][2] = 1;
-        t[0][3] = 1;
+        //Mat t(4, 4);
+        //t[0][0] = 1;
+        //t[0][1] = 1;
+        //t[0][2] = 1;
+        //t[0][3] = 1;
 
-        t[1][1] = 1/3;
-        t[1][2] = 2/3;
-        t[1][3] = 1;
+        //t[1][1] = 1 / 3;
+        //t[1][2] = 2 / 3;
+        //t[1][3] = 1;
 
-        t[2][2] = 1/3;
-        t[2][3] = 1;
+        //t[2][2] = 1 / 3;
+        //t[2][3] = 1;
 
-        t[3][3] = 1;
+        //t[3][3] = 1;
+
+        Mat t = { {1, 1, 1, 1}, {0, 1 / 3, 2 / 3, 1}, {0, 0, 1 / 3, 1}, {0, 0, 0, 1} };
 
         return t;
     }
@@ -145,20 +150,22 @@ public:
 
     static Mat HermiteBasis()
     {
-        Mat t(4, 4);
-        t[0][0] = 2;
-        t[0][1] = -3;
-        t[0][3] = 1;
+        //Mat t(4, 4);
+        //t[0][0] = 2;
+        //t[0][1] = -3;
+        //t[0][3] = 1;
 
-        t[1][0] = -2;
-        t[1][1] = 3;
+        //t[1][0] = -2;
+        //t[1][1] = 3;
 
-        t[2][1] = 1;
-        t[2][2] = -2;
-        t[2][3] = 1;
+        //t[2][1] = 1;
+        //t[2][2] = -2;
+        //t[2][3] = 1;
 
-        t[3][1] = 1;
-        t[3][2] = -1;
+        //t[3][1] = 1;
+        //t[3][2] = -1;
+
+        Mat t = { {1, 0, -3, 2}, {0, 1, -2, 1}, {0, 0, 3, -2}, {0, 0, -1, 1} };
 
         return t;
     }
