@@ -32,8 +32,8 @@ public:
     Mat(std::initializer_list<std::vector<double>> list)
     {
         arr = list;
-        rows = arr.size();
-        cols = arr[0].size();
+        cols = arr.size();
+        rows = arr[0].size();
 
         powerArr = std::vector<std::vector<double>>(cols, std::vector<double>(rows, 1));
         varArr = std::vector<std::vector<double>>(cols, std::vector<double>(rows, 0));
@@ -137,7 +137,7 @@ public:
 
         //t[3][3] = 1;
 
-        Mat t = { {1, 1, 1, 1}, {0, 1 / 3, 2 / 3, 1}, {0, 0, 1 / 3, 1}, {0, 0, 0, 1} };
+        Mat t = { {1, 1, 1, 1}, {0, (double)1 / 3, (double)2 / 3, 1}, {0, 0, (double)1 / 3, 1}, {0, 0, 0, 1} };
 
         return t;
     }
