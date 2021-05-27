@@ -177,6 +177,30 @@ Mat operator * (Mat a, Mat b)
     return a.Mult(b);
 }
 
+class BezierCurve : public Mat 
+{
+    using Mat::Mat;
+public:
+    double at(double t)
+    {
+        Mat tb(1, 4, 1);
+        tb.setPowers({ {1}, {1}, {2}, {3} });
+        tb.setVariables({ {0}, {1}, {1}, {1} });
+        auto i = tb.input(t);
+        return (i * Mat::BeizerBasis() * *this)[0][0];
+    }
+};
+
+Mat operator * (Mat a, Mat *b) 
+{
+    return a.Mult(*b);
+}
+
+Mat operator * (Mat a, BezierCurve b) 
+{
+    return a.Mult(*(Mat*)&b);
+}
+
 double _DEGREES2RADIANS(long double a)
 {
     return a * DEGREES2RADIANS;
